@@ -1,0 +1,943 @@
+<title>Simulador Seguridad Social</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: una sola columna tipo "expediente" con barra superior de progreso y cronómetro */
+:root{
+  --bg:#F5F3EF; --paper:#FFFFFF; --ink:#22201C; --muted:#6B655C; --line:#E2DDD4;
+  --accent:#B4521A; --accent-soft:#F8E8DD; --gold:#A8771C; --gold-soft:#FBF1DC;
+  --ok:#1F7A4D; --ok-soft:#E2F3EA; --bad:#B3261E; --bad-soft:#FBE7E5; --warn:#9A6400;
+  --display:"Newsreader", Georgia, "Times New Roman", serif;
+  --body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#15141C; --paper:#1F1D29; --ink:#ECEAF4; --muted:#A19DB3; --line:#34313F;
+  --accent:#F29A62; --accent-soft:#3B2618; --gold:#E2B456; --gold-soft:#3A3020;
+  --ok:#5FCB92; --ok-soft:#1C3328; --bad:#F2867D; --bad-soft:#3D2120; --warn:#E7B24F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15141C; --paper:#1F1D29; --ink:#ECEAF4; --muted:#A19DB3; --line:#34313F;
+  --accent:#F29A62; --accent-soft:#3B2618; --gold:#E2B456; --gold-soft:#3A3020;
+  --ok:#5FCB92; --ok-soft:#1C3328; --bad:#F2867D; --bad-soft:#3D2120; --warn:#E7B24F; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(1.9rem,5vw,2.6rem);font-weight:700}
+h2{font-size:1.5rem}
+.eyebrow{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+.muted{color:var(--muted)}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:10px 16px;font-weight:600}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.primary:hover{filter:brightness(1.08)}
+.ghost{background:transparent}
+.small{padding:6px 12px;font-size:.85rem}
+/* mode picker */
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.fc{perspective:1600px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.fc-in{display:grid;transition:transform .55s cubic-bezier(.2,.7,.2,1);transform-style:preserve-3d}
+.fc.flip .fc-in{transform:rotateY(180deg)}
+.face{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:26px 22px;display:flex;flex-direction:column;gap:14px;min-height:300px;min-width:0}
+.face.front{justify-content:center;border-top:4px solid var(--accent)}
+.face.back{transform:rotateY(180deg);border-top:4px solid var(--gold)}
+.hint{font-size:.8rem;color:var(--muted)}
+.fc-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.know{border-color:var(--ok);color:var(--ok)} .dunno{border-color:var(--bad);color:var(--bad)}
+@media (prefers-reduced-motion:reduce){.fc-in{transition:none}}
+.mode{text-align:left;padding:16px;display:flex;flex-direction:column;gap:4px;border-width:2px}
+.mode b{font-family:var(--display);font-size:1.2rem}
+.mode span{font-weight:400;color:var(--muted);font-size:.9rem}
+.mode[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+label.f{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.9rem;min-width:0}
+input[type=number],select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:6px 12px;font-size:.85rem;font-weight:500;border-radius:999px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.check{display:flex;gap:8px;align-items:center;font-size:.92rem}
+/* quiz header */
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.progress{height:6px;background:var(--line);border-radius:6px;overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.timer{font-family:var(--mono);font-weight:700;font-size:1.1rem;display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.timer.low{color:var(--bad)}
+.tbar{height:4px;background:var(--line);border-radius:4px;overflow:hidden}
+.tbar>i{display:block;height:100%;background:var(--gold);transition:width 1s linear}
+.tbar.low>i{background:var(--bad)}
+.tag{display:inline-block;font-family:var(--mono);font-size:.75rem;font-weight:700;color:var(--gold);background:var(--gold-soft);padding:3px 8px;border-radius:6px}
+.q{font-family:var(--display);font-size:clamp(1.25rem,3.4vw,1.55rem);font-weight:500;line-height:1.3}
+.opts{display:flex;flex-direction:column;gap:10px}
+.opt{text-align:left;font-weight:500;display:flex;gap:12px;align-items:flex-start;padding:12px 14px}
+.opt .k{font-family:var(--mono);font-weight:700;color:var(--muted);min-width:1.2em}
+.opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.opt:disabled{cursor:default;opacity:1}
+textarea{min-height:110px;resize:vertical;line-height:1.5}
+.verdict{border-radius:12px;padding:14px 16px;font-weight:700;display:flex;gap:10px;align-items:center}
+.verdict.ok{background:var(--ok-soft);color:var(--ok)}
+.verdict.bad{background:var(--bad-soft);color:var(--bad)}
+.verdict.mid{background:var(--gold-soft);color:var(--warn)}
+.panel{border-left:3px solid var(--line);padding:4px 0 4px 14px;display:flex;flex-direction:column;gap:4px}
+.panel h3{font-family:var(--body);font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.panel.pdf{border-color:var(--accent)}
+.panel.tip{border-color:var(--gold)}
+.panel.mn{border-color:var(--ok)}
+.pdftext{font-family:var(--display);font-size:1.08rem;line-height:1.45;white-space:pre-line}
+.kw{display:flex;flex-wrap:wrap;gap:6px}
+.kw span{font-size:.78rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
+.kw span.hit{border-color:var(--ok);color:var(--ok)}
+.kw span.miss{border-color:var(--bad);color:var(--bad);text-decoration:line-through}
+.score{font-family:var(--display);font-size:3.2rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.list{display:flex;flex-direction:column;gap:8px}
+.li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:.92rem}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+kbd{font-family:var(--mono);font-size:.78rem;border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.foot{font-size:.82rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap" id="app"></div>
+
+<script>
+/* ===================== BANCO DE PREGUNTAS =====================
+ r = respuesta tal cual el PDF | c = opción correcta (modo marcar) | o = distractores
+ k = palabras clave (grupos; basta un sinónimo por grupo) | t = tip | m = mnemotecnia */
+const BANK = [
+// ================= QUÉ ES EL SCTR =================
+{s:"dia",a:"Ley N° 26790",q:"¿Qué es el SCTR y qué normas lo crean y regulan?",
+ r:"Seguro creado por la Ley N° 26790, Ley de Modernización de la Seguridad Social en Salud, y su reglamento, aprobado con D. S. 009-97-SA, y se rige de acuerdo a la norma técnica del D. S. N° 003-98-SA.",
+ c:"Seguro creado por la Ley N° 26790, su reglamento D.S. 009-97-SA y la norma técnica D.S. 003-98-SA",
+ o:["Seguro creado por la Ley N° 29783, regulado por el D.S. 005-2012-TR","Seguro creado por el D.L. 19990 y regulado por la ONP","Seguro creado por la Ley N° 18846 (SEGATEP)"],
+ k:[["26790"],["009-97","009 97","reglamento"],["003-98","003 98","norma tecnica"]],
+ t:"Tres normas: la LEY (26790), el REGLAMENTO (009-97-SA) y la NORMA TÉCNICA (003-98-SA).",
+ m:"«26-7-90, luego 9-97 y 3-98»: la ley primero, el reglamento después y la técnica al final (en orden de años)."},
+{s:"dia",a:"Art. 19 Ley 26790",q:"Según el Art. 19 de la Ley 26790, ¿a quiénes otorga cobertura adicional el SCTR?",
+ r:"El Seguro Complementario de Trabajo de Riesgo otorga cobertura adicional a los afiliados regulares del Seguro Social de Salud que desempeñan las actividades de alto riesgo determinadas mediante el anexo 5 del D. S. 009-97-SA.",
+ c:"A los afiliados regulares del Seguro Social de Salud que desempeñan actividades de alto riesgo del Anexo 5 del D.S. 009-97-SA",
+ o:["A todos los trabajadores del país sin excepción","Solo a los trabajadores independientes","Solo a los obreros de construcción civil"],
+ k:[["afiliados regulares","seguro social","essalud"],["alto riesgo","riesgo"],["anexo 5"]],
+ t:"«Complementario» porque se suma a lo que ya da EsSalud.",
+ m:"«Complementario = Complemento de EsSalud para los que corren Riesgo»."},
+{s:"dia",a:"Art. 19 Ley 26790",q:"¿El SCTR es obligatorio? ¿Por cuenta de quién corre?",
+ r:"Es obligatorio y por cuenta de la entidad empleadora.",
+ c:"Sí, es obligatorio y por cuenta de la entidad empleadora",
+ o:["Es voluntario y lo paga el trabajador","Es obligatorio y se divide 50% empleador y 50% trabajador","Es obligatorio y lo paga el Estado"],
+ k:[["obligatorio"],["empleador","empleadora","empresa"]],
+ t:"El empleador asume el 100% del costo.",m:"«El que crea el riesgo, paga el seguro»."},
+{s:"dia",a:"Art. 19 Ley 26790",q:"¿Qué riesgos cubre el SCTR según el Art. 19 (incisos a y b)?",
+ r:"a) Otorgamiento de prestaciones de salud en caso de accidentes de trabajo o enfermedades profesionales, pudiendo contratarse libremente con el IPSS o con la EPS elegida.\nb) Otorgamiento de pensiones de invalidez temporal o permanente y de sobrevivientes y gastos de sepelio, como consecuencia de accidentes de trabajo o enfermedades profesionales, pudiendo contratarse libremente con la ONP o con empresas de seguros debidamente acreditadas.",
+ c:"a) Prestaciones de salud (IPSS o EPS) y b) pensiones de invalidez, sobrevivencia y gastos de sepelio (ONP o aseguradoras)",
+ o:["a) Subsidios por maternidad y b) CTS","a) Pensión de jubilación y b) seguro de desempleo","a) Solo atención de emergencia y b) solo sepelio"],
+ k:[["salud"],["ipss","eps","essalud"],["invalidez","pension","sobreviv","sepelio"],["onp","seguros","aseguradora"]],
+ t:"Salud → IPSS (hoy EsSalud) o EPS. Pensión → ONP o compañía de seguros.",
+ m:"«S con E (Salud → EsSalud/EPS); P con O (Pensión → ONP/aseguradora)»."},
+{s:"dia",a:"Art. 19 Ley 26790",q:"¿Desde cuándo se inicia el derecho a las pensiones de invalidez del SCTR?",
+ r:"El derecho a las pensiones de invalidez del seguro complementario de trabajo de riesgo se inicia una vez vencido el período máximo de subsidio por incapacidad temporal cubierto por el Seguro Social de Salud.",
+ c:"Una vez vencido el período máximo de subsidio por incapacidad temporal cubierto por el Seguro Social de Salud",
+ o:["Desde el día del accidente","Desde que el trabajador cumple 10 años de aportes","Desde que lo ordena un juez"],
+ k:[["vencido","termina","acaba","despues"],["subsidio"],["incapacidad temporal","temporal"]],
+ t:"Primero EsSalud paga subsidio; cuando se acaba, entra la pensión del SCTR.",
+ m:"«Primero subsidio, luego pensión: se pasan la posta»."},
+{s:"dia",a:"Alcances del SCTR",q:"¿A qué seguro reemplazó el SCTR y a quiénes amparaba ese seguro anterior?",
+ r:"Reemplazó al seguro por accidentes de trabajo y enfermedades profesionales (SEGATEP) de la Ley N° 18846 (derogada) que amparaba exclusivamente a los trabajadores obreros y era administrado por el Instituto Peruano de Seguridad Social (IPSS).",
+ c:"Al SEGATEP de la Ley N° 18846, que amparaba exclusivamente a obreros y era administrado por el IPSS",
+ o:["Al SOAT, que amparaba a conductores","Al SNP del D.L. 19990, que amparaba a empleados","Al SPP, administrado por las AFP"],
+ k:[["segatep"],["18846"],["obreros"],["ipss"]],
+ t:"La gran diferencia: el SCTR cubre a empleados Y obreros; el SEGATEP solo a obreros.",
+ m:"«SEGATEP = Solo obrEros (era del IPSS)»."},
+{s:"dia",a:"Alcances del SCTR",q:"¿Cuántas actividades económicas de riesgo deben contar con SCTR y dónde están detalladas?",
+ r:"La normativa exige que un total de 270 actividades económicas consideradas de riesgo deban contar con el Seguro Complementario de Trabajo de Riesgo (SCTR). Estas actividades están detalladas en el Anexo 5 del Decreto Supremo N° 009-97-SA (Reglamento de la Ley de Modernización de la Seguridad Social en Salud).",
+ c:"270 actividades, detalladas en el Anexo 5 del D.S. 009-97-SA",
+ o:["100 actividades, en el Anexo 1 de la Ley 29783","500 actividades, en la Ley 26790","27 actividades, en el D.S. 003-98-SA"],
+ k:[["270","doscientos setenta"],["anexo 5"]],
+ t:"",m:"«270 riesgos en el Anexo 5»: 2-7-0 → «dos siete cero, cinco anexo»."},
+{s:"dia",a:"Anexo 5 D.S. 009-97-SA",q:"Menciona actividades de riesgo del Anexo 5 del D.S. 009-97-SA.",
+ r:"Construcción; Electricidad, gas y vapor; Explotación de minas de carbón; Extracción de madera, minerales metálicos, otros materiales; Fabricación de otros productos minerales no metálicos, productos químicos, productos derivados del petróleo y del carbón, productos metálicos, de productos plásticos, de textiles, de vidrio; Industria básica de hierro y acero; Industria básica de metales no ferrosos; Industria de la madera; Industria del cuero; Industria del tabaco; Periodismo; Pesca; Hospitales; Servicios médicos y odontológicos, sanidad veterinaria; Inspectores de Trabajo (agregados posteriormente); Transporte de Pasajeros de Alto Riesgo (Transporte Interprovincial); Transporte de Carga.",
+ c:"Construcción, minería, electricidad, pesca, periodismo, hospitales, transporte de carga e interprovincial, entre otras",
+ o:["Banca, seguros y contabilidad","Docencia universitaria, consultoría y diseño gráfico","Comercio minorista y oficinas administrativas"],
+ k:[["construccion","mina","pesca","periodismo","hospital","transporte","electricidad","madera","tabaco"]],
+ t:"Ojo a las «raras»: periodismo, inspectores de trabajo y hospitales también están.",
+ m:"«Con Pe-Pe en el Hospi-Trans»: Construcción, Pesca, Periodismo, Hospitales, Transporte."},
+{s:"dia",a:"Anexo 5",q:"¿Qué tipo de transporte de pasajeros está incluido en el Anexo 5 como actividad de alto riesgo?",
+ r:"Transporte de Pasajeros de Alto Riesgo (Transporte Interprovincial)",
+ c:"El transporte interprovincial",o:["El transporte urbano en mototaxi","El transporte escolar","El transporte aéreo comercial"],
+ k:[["interprovincial"]],t:"También está el transporte de carga.",m:"«Inter-provincial = Inter-riesgo»."},
+// ================= COBERTURAS Y ASEGURADOS =================
+{s:"cal",a:"Art. 82 D.S. 009-97-SA",q:"¿Qué entidades empleadoras están comprendidas también en la obligación de contratar SCTR (Art. 82)?",
+ r:"Están comprendidas en esta obligación las Entidades Empleadoras constituidas bajo la modalidad de cooperativas de trabajadores, empresas de servicios temporales o cualquier otra de intermediación laboral.",
+ c:"Cooperativas de trabajadores, empresas de servicios temporales o cualquier otra de intermediación laboral",
+ o:["Solo las empresas estatales","Solo las microempresas","Ninguna intermediadora está obligada"],
+ k:[["cooperativa"],["servicios temporales","temporal"],["intermediacion"]],
+ t:"Aunque el trabajador esté «tercerizado», igual debe tener SCTR.",m:"«Co-Te-In»: Cooperativas, Temporales, Intermediación."},
+{s:"cal",a:"Art. 82 D.S. 009-97-SA",q:"¿Quiénes son asegurados obligatorios del SCTR según el Art. 82?",
+ r:"Son asegurados obligatorios del seguro complementario de trabajo de riesgo, la totalidad de los trabajadores del centro de trabajo en el cual se desarrollan las actividades previstas en el Anexo 5, así como todos los demás trabajadores de la empresa, que no perteneciendo a dicho centro de trabajo, se encuentren regularmente expuestos al riesgo de accidente de trabajo o enfermedad profesional por razón de sus funciones.",
+ c:"Todos los trabajadores del centro de trabajo de riesgo y los demás trabajadores regularmente expuestos al riesgo por sus funciones",
+ o:["Solo los obreros que operan maquinaria","Solo los trabajadores con más de un año","Solo quienes lo soliciten por escrito"],
+ k:[["totalidad","todos"],["centro de trabajo"],["expuestos","exposicion","riesgo"]],
+ t:"Dos grupos: los del centro de riesgo + los que van regularmente a exponerse.",
+ m:"«Todos los de adentro y los que se asoman seguido»."},
+{s:"cal",a:"Art. 83 · SCTR Salud",q:"¿Qué comprende la cobertura de SCTR Salud (Art. 83)?",
+ r:"La cobertura de salud por trabajo de riesgo comprende prestaciones de asistencia y asesoramiento preventivo promocional en salud ocupacional; atención médica; rehabilitación y readaptación laboral, cualquiera que sea su nivel de complejidad.",
+ c:"Asistencia y asesoramiento preventivo promocional en salud ocupacional, atención médica, rehabilitación y readaptación laboral",
+ o:["Subsidios económicos por incapacidad","Pensión de jubilación anticipada","Solo atención de emergencias"],
+ k:[["preventiv","promocional","asesoramiento"],["atencion medica","medica"],["rehabilitacion","readaptacion"]],
+ t:"«Cualquiera que sea su nivel de complejidad»: no hay tope.",
+ m:"«PAR»: Prevención, Atención, Rehabilitación."},
+{s:"cal",a:"Art. 83 · SCTR Salud",q:"¿Qué NO comprende el SCTR Salud y quién lo cubre?",
+ r:"No comprende los subsidios económicos que son por cuenta del Seguro Social de Salud.",
+ c:"Los subsidios económicos, que son por cuenta del Seguro Social de Salud",
+ o:["La rehabilitación, que cubre la ONP","La atención médica, que cubre el empleador","La readaptación laboral, que cubre el MINSA"],
+ k:[["subsidio"],["seguro social","essalud"]],t:"",m:"«El subsidio lo da la Social (EsSalud), no el SCTR»."},
+{s:"cal",a:"SCTR Pensión",q:"¿Qué cubre el SCTR Pensión?",
+ r:"a) Pensión de Invalidez (temporal o permanente): Pago de una pensión o indemnización invalidez al asegurado en situación de invalidez\nb) Pensión de Sobrevivencia: Pago de pensiones de sobrevivencia a los beneficiarios en caso de fallecimiento del asegurado.\nc) Gastos de Sepelio: En caso de fallecimiento de un asegurado.",
+ c:"Pensión de invalidez (temporal o permanente), pensión de sobrevivencia y gastos de sepelio",
+ o:["Atención médica, hospitalización y medicinas","Pensión de jubilación, CTS y gratificaciones","Subsidio por incapacidad temporal y lactancia"],
+ k:[["invalidez"],["sobreviv"],["sepelio"]],
+ t:"Ninguna es «jubilación»: todas nacen de un accidente o enfermedad laboral.",
+ m:"«I-S-S»: Invalidez, Sobrevivencia, Sepelio → «ISS, el seguro te asiste»."},
+{s:"cal",a:"Art. 86",q:"Conforme al Art. 86, ¿pueden las coberturas del SCTR establecer carencias o copagos?",
+ r:"Conforme al art. 86, las coberturas del Seguro Complementario de trabajo de riesgo no pueden establecer carencias ni copagos a cargo del trabajador.",
+ c:"No, no pueden establecer carencias ni copagos a cargo del trabajador",
+ o:["Sí, un copago del 10%","Sí, una carencia de 3 meses","Solo copago en medicinas"],
+ k:[["no"],["carencia"],["copago"]],t:"Cobertura desde el primer día y sin pagar nada el trabajador.",m:"«86 = Ni Ocho ni Seis soles: cero copago»."},
+{s:"cal",a:"Registro",q:"¿Dónde deben inscribirse las entidades empleadoras de alto riesgo y quién supervisa la obligación de contratar el SCTR?",
+ r:"Las entidades empleadoras que desarrollan actividades de alto riesgo deben inscribirse como tales en el Registro que para el efecto administra el Ministerio de Trabajo, entidad que supervisa el cumplimiento de la obligación de contratar el seguro complementario de trabajo de riesgo, aplicando las sanciones administrativas correspondientes.",
+ c:"En el Registro que administra el Ministerio de Trabajo, que además supervisa y sanciona",
+ o:["En SUNARP, que supervisa la SBS","En el MINSA, que supervisa EsSalud","En la ONP, que supervisa la AFP"],
+ k:[["ministerio de trabajo","mintra","trabajo"],["registro"]],t:"Hoy la fiscalización la hace SUNAFIL.",m:"«Trabajo registra y Trabajo sanciona»."},
+{s:"cal",a:"Tipos de afiliado",q:"Diferencia entre el afiliado obligatorio y el facultativo/potestativo del SCTR.",
+ r:"Obligatorio: Sí realizan actividad de riesgo (por la actividad de la empresa o por su exposición). El Empleador asume el 100% del costo. Sí, por mandato legal (Anexo 5 o ley específica).\nFacultativo/Potestativo: Pueden o no realizarla. Contrata el Trabajador Independiente o el Empleador (si lo hace de forma voluntaria). No es obligatorio, es una decisión voluntaria. Aplica a: 1. Independientes que realizan actividades de riesgo; 2. Trabajadores dependientes con puestos no expuestos al riesgo que el empleador decide asegurar de forma adicional.",
+ c:"Obligatorio: realiza actividad de riesgo y el empleador paga el 100%; Facultativo: es voluntario, lo contrata el independiente o el empleador por decisión propia",
+ o:["Obligatorio: lo paga el trabajador; Facultativo: lo paga el Estado","Ambos los paga el trabajador","Obligatorio: solo independientes; Facultativo: solo obreros"],
+ k:[["obligatorio"],["100","empleador"],["facultativo","potestativo","voluntari"],["independiente"]],
+ t:"",m:"«Obligatorio = Obliga al empleador; Facultativo = Facultad (si quieres)»."},
+{s:"cal",a:"D.S. 003-98-SA",q:"Según el D.S. 003-98-SA, ¿a quiénes otorga coberturas el SCTR?",
+ r:"El SCTR otorga coberturas por accidente de trabajo y enfermedad profesional a los trabajadores empleados y obreros que tienen la calidad de afiliados regulares del Seguro Social de Salud y que laboran en un centro de trabajo en el que la Entidad Empleadora realiza las actividades descritas en el Anexo 5 del Decreto Supremo N° 009-97-SA.",
+ c:"A empleados y obreros afiliados regulares del Seguro Social de Salud que laboran en un centro de trabajo con actividades del Anexo 5",
+ o:["Solo a obreros","Solo a empleados de oficina","A cualquier ciudadano"],
+ k:[["empleados"],["obreros"],["afiliados regulares","seguro social"],["anexo 5","riesgo"]],
+ t:"",m:"«Empleados + Obreros = E.O. (¡y no solo obreros como el SEGATEP!)»."},
+// ================= ACCIDENTE DE TRABAJO =================
+{s:"tac",a:"Art. 2 D.S. 003-98-SA",q:"¿Qué es accidente de trabajo según el Art. 2 del D.S. 003-98-SA?",
+ r:"Se considera accidente de trabajo toda lesión orgánica o perturbación funcional causada en el centro de trabajo o con ocasión del trabajo, por acción imprevista, fortuita u ocasional de una fuerza externa, repentina y violenta que obra súbitamente sobre la persona del trabajador o debido al esfuerzo del mismo.",
+ c:"Lesión orgánica o perturbación funcional causada en el centro de trabajo o con ocasión del trabajo, por una fuerza externa, repentina y violenta, o debido al esfuerzo del mismo",
+ o:["Todo estado patológico que sobreviene por la clase de trabajo","Cualquier lesión ocurrida en el trayecto a casa","Solo las lesiones causadas por máquinas"],
+ k:[["lesion organica","perturbacion funcional","lesion"],["ocasion del trabajo","centro de trabajo"],["fuerza externa","repentina","violenta","subita"],["esfuerzo"]],
+ t:"Palabras clave: imprevista, fortuita, repentina, violenta, súbita… y «esfuerzo del mismo».",
+ m:"«Lesión o Perturbación por un golpe de Fuera o un esfuerzo de Dentro»."},
+{s:"tac",a:"Reglamento Ley SST",q:"¿Cómo define el glosario del reglamento de la Ley de SST al accidente de trabajo?",
+ r:"Todo suceso repentino que sobrevenga por causa o con ocasión del trabajo y que produzca en el trabajador una lesión orgánica, una perturbación funcional, una invalidez o la muerte.",
+ c:"Todo suceso repentino por causa o con ocasión del trabajo que produzca lesión orgánica, perturbación funcional, invalidez o muerte",
+ o:["Todo estado patológico permanente o temporal","Todo hecho ocurrido fuera de la jornada","Toda enfermedad listada por el MINSA"],
+ k:[["repentino","subito"],["causa","ocasion"],["lesion","perturbacion","invalidez","muerte"]],
+ t:"Consecuencias de menor a mayor: lesión → perturbación → invalidez → muerte.",m:"«L-P-I-M»: «Lo Peor Invalida o Mata»."},
+{s:"tac",a:"Elementos",q:"¿Cuáles son los elementos clave de la definición de accidente de trabajo?",
+ r:"Suceso Repentino: Implica un evento inesperado o instantáneo, diferenciándolo de una enfermedad laboral (la cual generalmente se desarrolla con el tiempo).\nCausa del trabajo o con Ocasión del Trabajo: El evento debe tener una relación directa con las actividades, tareas o el entorno del trabajo.\nConsecuencia en el Trabajador: El resultado debe ser un daño a la salud o la vida, incluyendo: Lesión Orgánica, Perturbación Funcional, Invalidez o Muerte.",
+ c:"Suceso repentino, causa u ocasión del trabajo y consecuencia (daño) en el trabajador",
+ o:["Culpa del empleador, denuncia policial y pericia","Exposición prolongada, agente químico y diagnóstico","Contrato escrito, planilla y SCTR vigente"],
+ k:[["repentino","subito","instantaneo"],["causa","ocasion"],["consecuencia","dano","lesion"]],
+ t:"«Repentino» es lo que lo diferencia de la enfermedad profesional (lenta).",m:"«R-O-C»: Repentino, Ocasión, Consecuencia → «una ROCa que te cae»."},
+{s:"tac",a:"Elementos",q:"Diferencia entre lesión orgánica y perturbación funcional, con ejemplos.",
+ r:"Lesión Orgánica: Un daño físico o biológico evidente (ej. una fractura, un corte).\nPerturbación Funcional: Una alteración en el funcionamiento normal de un órgano o sistema (ej. una pérdida auditiva súbita por ruido, un esguince).",
+ c:"Lesión orgánica: daño físico evidente (fractura, corte); Perturbación funcional: alteración del funcionamiento de un órgano (pérdida auditiva súbita, esguince)",
+ o:["Lesión orgánica: estrés; Perturbación funcional: fractura","Son sinónimos","Lesión orgánica: enfermedad lenta; Perturbación: accidente"],
+ k:[["fractura","corte","fisico","evidente"],["funcionamiento","auditiva","esguince","alteracion"]],
+ t:"",m:"«Orgánica = se Ve; Funcional = Funciona mal»."},
+{s:"tac",a:"«Esfuerzo del mismo»",q:"¿Por qué es fundamental la frase «debido al esfuerzo del mismo»?",
+ r:"La inclusión de la frase \"debido al esfuerzo del mismo\" es fundamental porque amplía el concepto de accidente de trabajo más allá de un evento externo (como una caída o un golpe) e incluye las lesiones internas o fisiológicas que resultan de la exigencia física de la labor.",
+ c:"Porque amplía el concepto más allá de un evento externo e incluye lesiones internas o fisiológicas por la exigencia física de la labor",
+ o:["Porque excluye las lesiones por cargar peso","Porque obliga a probar culpa del trabajador","Porque limita el accidente a caídas y golpes"],
+ k:[["amplia","incluye","mas alla"],["interna","fisiolog","esfuerzo","exigencia fisica"]],
+ t:"Ejemplo típico: hernia discal al levantar una caja.",m:"«No solo lo que te pega, también lo que te jala por dentro»."},
+{s:"tac",a:"«Esfuerzo del mismo»",q:"¿Cuáles son los 3 grupos de ejemplos de accidentes de trabajo por «esfuerzo del mismo»?",
+ r:"1. Lesiones Músculo-Esqueléticas Súbitas\n2. Eventos Cardiovasculares y Cerebrovasculares\n3. Lesiones Oculares o Auditivas (por esfuerzo de presión)",
+ c:"Lesiones músculo-esqueléticas súbitas, eventos cardiovasculares/cerebrovasculares y lesiones oculares o auditivas por presión",
+ o:["Burnout, depresión y ansiedad","Neumoconiosis, asbestosis y silicosis","Caídas, golpes y cortes"],
+ k:[["musculo","esquelet","hernia","ligamento"],["cardio","cerebro","infarto","derrame"],["ocular","auditiv","valsalva"]],
+ t:"Hernia discal, rotura de ligamento; infarto o derrame; hemorragia ocular por Valsalva.",m:"«Hueso, Corazón y Ojo»."},
+{s:"tac",a:"«Esfuerzo del mismo»",q:"Para que un evento cardíaco se considere accidente de trabajo, ¿qué debe probarse?",
+ r:"Para que un evento cardíaco se considere accidente de trabajo, debe probarse la conexión causal entre el esfuerzo físico extremo e inmediato requerido por el trabajo (la \"ocasión del trabajo\") y el evento médico repentino, generalmente mediante peritaje médico.",
+ c:"La conexión causal entre el esfuerzo físico extremo e inmediato del trabajo y el evento repentino, generalmente con peritaje médico",
+ o:["Solo que ocurrió dentro de la jornada","Que el trabajador no tenía antecedentes","Que haya testigos"],
+ k:[["causal","conexion","nexo"],["esfuerzo"],["peritaje","perito","medico"]],t:"",m:"«Corazón + esfuerzo + perito»."},
+{s:"tac",a:"«Esfuerzo del mismo»",q:"¿Cuál es la clave legal que distingue el accidente por esfuerzo de la enfermedad profesional?",
+ r:"La clave legal es el carácter súbito y repentino de la lesión, distinguiéndola de una enfermedad profesional (que es de desarrollo lento y progresivo).",
+ c:"El carácter súbito y repentino de la lesión, frente a la enfermedad profesional, de desarrollo lento y progresivo",
+ o:["Que el accidente siempre deja invalidez","Que la enfermedad siempre está listada","Que el accidente ocurre fuera del centro de trabajo"],
+ k:[["subito","repentino"],["lento","progresivo"]],t:"",m:"«Accidente = Ahora; Enfermedad = En el tiempo»."},
+{s:"tac",a:"Art. 2.2 a)",q:"¿Es accidente de trabajo el que ocurre durante la ejecución de órdenes del empleador fuera del centro y de las horas de trabajo?",
+ r:"a) El que sobrevenga al trabajador ASEGURADO durante la ejecución de órdenes de la Entidad Empleadora o bajo su autoridad, aun cuando se produzca fuera del centro y de las horas de trabajo.",
+ c:"Sí, aun cuando se produzca fuera del centro y de las horas de trabajo",
+ o:["No, solo dentro del centro de trabajo","No, solo dentro del horario","Solo si hay testigos"],
+ k:[["si","aun cuando","aunque"],["ordenes","autoridad"]],t:"La clave es la ORDEN del empleador.",m:"«Donde te manda el jefe, te cubre el seguro»."},
+{s:"tac",a:"Art. 2.2 b)",q:"¿Es accidente de trabajo el que ocurre antes, durante o después de la jornada o en las interrupciones?",
+ r:"b) El que se produce antes, durante o después de la jornada laboral o en las interrupciones del trabajo; si el trabajador ASEGURADO se hallara por razón de sus obligaciones laborales, en cualquier centro de trabajo de la entidad Empleadora, aunque no se trate de un centro de trabajo de riesgo ni se encuentre realizando las actividades propias del riesgo contratado.",
+ c:"Sí, si está por razón de sus obligaciones en cualquier centro de trabajo de la empleadora, aunque no sea de riesgo",
+ o:["No, solo durante la jornada efectiva","Solo si está realizando la actividad de riesgo","Solo en el centro de trabajo de riesgo"],
+ k:[["obligaciones"],["centro de trabajo","cualquier centro"]],
+ t:"Ej.: llega 15 min antes y cae en la escalera; resbala en el comedor en su descanso; se golpea al cerrar el almacén a las 5:15 pm.",
+ m:"«Antes, Durante, Después… si estás en casa del empleador, cuenta»."},
+{s:"tac",a:"Refrigerio",q:"En el horario de refrigerio, ¿cuándo SÍ es accidente de trabajo y cuándo NO?",
+ r:"SÍ: Accidente en el comedor de la empresa; accidente con equipo del empleador (cafetera o microondas); accidente que surge del entorno (objeto mal almacenado que cae en la sala de descanso).\nNO (Regla General): Un trabajador sale de las instalaciones para almorzar en un restaurante cercano y es atropellado en la calle. Esto sería un accidente común, no laboral.",
+ c:"Sí dentro de la empresa (comedor, equipos, entorno); No si sale a un restaurante y es atropellado en la calle",
+ o:["Nunca es accidente de trabajo en el refrigerio","Siempre es accidente de trabajo","Solo si almuerza en su escritorio"],
+ k:[["comedor","dentro","instalaciones","empresa","equipo"],["fuera","restaurante","calle","atropell","comun"]],
+ t:"",m:"«Comes adentro = cubierto; comes afuera = común»."},
+{s:"tac",a:"Art. 2.2 c)",q:"¿Es accidente de trabajo el causado por el empleador, sus representantes o un tercero?",
+ r:"c) El que sobrevenga por acción de la Entidad Empleadora o sus representantes o de tercera persona, durante la ejecución del trabajo.",
+ c:"Sí, durante la ejecución del trabajo",o:["No, solo si lo causa el propio trabajador","No, si lo causa un tercero es común","Solo si lo causa el gerente"],
+ k:[["si"],["ejecucion","trabajo"],["tercer","empleador","representante"]],
+ t:"Tercero = cliente, proveedor, visitante e incluso un delincuente.",m:"«Jefe o extraño, si trabajabas, es laboral»."},
+{s:"tac",a:"Desplazamientos",q:"¿Es accidente de trabajo el trayecto entre dos sedes, a casa de un cliente o a una capacitación externa?",
+ r:"Trayecto entre dos Sedes de la Empresa: SÍ. Es una orden del empleador y forma parte de la ejecución del trabajo.\nTrayecto a Casa de un Cliente / Viaje a otra Ciudad: SÍ. Es una orden del empleador (comisión de servicio) y el deber de prevención abarca el desplazamiento.\nTrayecto a una Capacitación Externa: SÍ. Es una actividad bajo la autoridad del empleador.",
+ c:"Sí en los tres casos: son órdenes o actividades bajo la autoridad del empleador (accidente «en misión»)",
+ o:["No en ninguno, son in itinere","Solo entre sedes","Solo si es en vehículo de la empresa"],
+ k:[["si"],["orden","autoridad","mision","comision"]],t:"Se llama accidente «en misión».",m:"«Misión = te mandaron = te cubren»."},
+{s:"tac",a:"Art. 54 Ley 29783",q:"¿Qué dice el Art. 54 de la Ley 29783 sobre el deber de prevención?",
+ r:"\"El deber de prevención abarca también toda actividad que se desarrolle durante la ejecución de órdenes del empleador, o durante la ejecución de una labor bajo su autoridad, o en el desplazamiento a la misma, aun fuera del lugar y horas de trabajo.\"",
+ c:"Abarca toda actividad durante la ejecución de órdenes del empleador o labor bajo su autoridad, o en el desplazamiento a la misma, aun fuera del lugar y horas de trabajo",
+ o:["Solo abarca el centro de trabajo y el horario","Excluye cualquier desplazamiento","Solo aplica a trabajadores de riesgo"],
+ k:[["ordenes","autoridad"],["desplazamiento"],["fuera del lugar","fuera","horas"]],
+ t:"Ley 29783 = Ley de Seguridad y Salud en el Trabajo.",m:"«54: el deber te sigue a donde vayas por orden del jefe»."},
+// ================= EXCLUSIONES =================
+{s:"ins",a:"Art. 2.3 a) · In itinere",q:"¿Es accidente de trabajo el que ocurre en el trayecto de ida y retorno al centro de trabajo?",
+ r:"a) El que se produce en el trayecto de ida y retorno al centro de trabajo, aunque el transporte sea realizado por cuenta de la Entidad Empleadora en vehículos propios o contratados para el efecto. \"In itinere\" (domicilio ↔ trabajo) NO es Accidente de Trabajo.",
+ c:"No, aunque el transporte sea por cuenta del empleador en vehículos propios o contratados",
+ o:["Sí, siempre","Sí, si el vehículo es de la empresa","Sí, si ocurre en horario laboral"],
+ k:[["no"],["aunque","aun"],["vehiculo","transporte","empleador"]],
+ t:"Regla general en Perú: NO es AT, aunque la empresa ponga el bus (según el D.S. 003-98-SA).",
+ m:"«In itinere = In-útil reclamar al SCTR» (va a SOAT o EsSalud)."},
+{s:"ins",a:"In itinere",q:"¿Qué significa «in itinere» y cómo se tratan esos accidentes?",
+ r:"El término \"in itinere\" significa \"en el camino\" y se refiere a los accidentes que ocurren durante el trayecto habitual entre el domicilio del trabajador y su centro de trabajo. Estos accidentes se tratan como Accidentes Comunes. La atención médica es cubierta por el SOAT (si aplica) y el seguro de salud regular (EsSalud o EPS).",
+ c:"«En el camino» (domicilio ↔ trabajo); se tratan como accidentes comunes, cubiertos por el SOAT y EsSalud/EPS",
+ o:["«En la misión»; los cubre el SCTR","«En el trabajo»; los paga el empleador","«En la ciudad»; los cubre la ONP"],
+ k:[["camino"],["domicilio","casa"],["comun"],["soat","essalud","eps"]],t:"",m:"«Itinerario = camino de casa»."},
+{s:"ins",a:"Art. 94 Reglamento Ley SST",q:"¿Qué excepciones establece el Art. 94 del Reglamento de la Ley SST para el desplazamiento domicilio-trabajo?",
+ r:"\"No se incluye el desplazamiento entre el domicilio del trabajador al lugar de trabajo y viceversa, salvo que ello esté contemplado en una norma sectorial por la naturaleza de la actividad, sea una condición de trabajo o el desplazamiento se realice en un medio de transporte brindado por el empleador, de forma directa o a través de terceros\".",
+ c:"Salvo norma sectorial, que sea condición de trabajo o que el transporte sea brindado por el empleador (directo o por terceros)",
+ o:["No tiene excepciones","Solo si el trabajador lo solicita","Solo si ocurre a menos de 5 km"],
+ k:[["sectorial"],["condicion de trabajo","condicion"],["transporte","brindado","empleador"]],
+ t:"Aquí está la antinomia: el D.S. 003-98-SA excluye el bus de la empresa, pero el Art. 94 lo incluye.",
+ m:"«S-C-T»: Sector, Condición, Transporte del jefe."},
+{s:"ins",a:"Caso práctico 2",q:"Caso Javier (bus de la empresa con itinerario fijo vuelca a 50 km del campamento): ¿cómo se resuelve la antinomia según el material?",
+ r:"La posición de la aseguradora no deja de ser aceptable; pues, el legislador aún no ha optado por cambiar la norma técnica de manera expresa, lo cual es un problema para el juzgador. El problema debe ser superado por el juzgador al momento de la interpretación concreta del supuesto. Al estar ante una suerte de antinomia, deberá prevalecer el espíritu de ser de la de mayor jerarquía, esto es, la Ley de Seguridad y Salud en el Trabajo.",
+ c:"Al haber antinomia, debe prevalecer la norma de mayor jerarquía: la Ley de Seguridad y Salud en el Trabajo",
+ o:["Prevalece siempre la norma técnica del SCTR","Lo decide la aseguradora","Se aplica el SOAT sin discusión"],
+ k:[["antinomia","jerarquia","prevalece"],["seguridad y salud","29783","ley"]],t:"Si iba en su carro particular, sería in itinere común.",m:"«La Ley le gana al Decreto»."},
+{s:"ins",a:"Art. 2.3 b)",q:"¿Es accidente de trabajo el provocado intencionalmente por el trabajador, o por su participación en riñas, peleas u otra acción ilegal?",
+ r:"b) No constituye accidente de trabajo el provocado intencionalmente por el propio trabajador o por su participación en riñas o peleas u otra acción ilegal.",
+ c:"No, hay ruptura del nexo causal",o:["Sí, si ocurre en el centro de trabajo","Sí, si ocurre en la jornada","Solo las riñas no cubiertas"],
+ k:[["no"]],t:"Ruptura del nexo causal: la causa es la voluntad del trabajador, no el trabajo.",m:"«Si tú lo buscaste, no es laboral»."},
+{s:"ins",a:"Art. 2.3 b) · Riñas",q:"¿Por qué no se considera accidente de trabajo la lesión por participar en una riña?",
+ r:"Ruptura del Nexo Causal: Se entiende que la causa directa de la lesión es una acción voluntaria del trabajador, ajena al cumplimiento de su labor, y no un riesgo inherente o con ocasión del trabajo.",
+ c:"Por ruptura del nexo causal: la causa es una acción voluntaria del trabajador, ajena a su labor",
+ o:["Porque ocurrió en el almuerzo","Porque no hubo denuncia policial","Porque el empleador no tiene SCTR"],
+ k:[["nexo causal","ruptura","rompe"],["voluntari","ajena"]],
+ t:"Ej.: dos compañeros pelean en el almuerzo por problemas vecinales o sentimentales.",m:"«Pelea personal = problema personal»."},
+{s:"ins",a:"Art. 2.3 b) · Intencional",q:"¿Por qué se excluyen las lesiones provocadas intencionalmente por el trabajador?",
+ r:"La Ley excluye las lesiones voluntariamente autoinfligidas, ya que anulan la naturaleza fortuita y súbita del accidente laboral y eliminan cualquier conexión con la actividad productiva.",
+ c:"Porque anulan la naturaleza fortuita y súbita del accidente y eliminan la conexión con la actividad productiva",
+ o:["Porque son muy costosas","Porque ocurren fuera del horario","Porque requieren peritaje"],
+ k:[["fortuita","subita","accidente"],["conexion","actividad productiva","nexo"]],t:"",m:"«Si es a propósito, no es accidente»."},
+{s:"ins",a:"Art. 2.3 c)",q:"¿Qué requisitos debe cumplir la exclusión por incumplimiento de una orden del empleador?",
+ r:"Orden Escrita: La orden debe haber sido comunicada al trabajador de forma escrita (ej. un procedimiento, reglamento, señal de seguridad, o instrucción directa documentada).\nEspecífica: La orden debe ser clara, precisa y directamente aplicable a la labor o riesgo en cuestión.\nIncumplimiento Causal: Debe existir una relación directa y probada entre el incumplimiento de esa orden específica y la ocurrencia del accidente.",
+ c:"Orden escrita, específica e incumplimiento causal (relación directa con el accidente)",
+ o:["Orden verbal, general y reiterada","Orden del sindicato, firmada y notarial","Cualquier orden, aunque no cause el accidente"],
+ k:[["escrita"],["especifica","clara","precisa"],["causal","relacion directa"]],
+ t:"Si la orden fue VERBAL, NO aplica la exclusión: sigue siendo AT.",m:"«E-E-C»: Escrita, Específica, Causal → «EEC: ¡Eso Está Claro!»."},
+{s:"ins",a:"Art. 2.3 c)",q:"Si el trabajador incumple una orden VERBAL específica y se accidenta, ¿es accidente de trabajo?",
+ r:"NO aplica la exclusión. Al ser verbal, no cumple el requisito formal para eximir al empleador. SÍ es Accidente de Trabajo. (Se presume nexo causal).",
+ c:"Sí es accidente de trabajo: al ser verbal no cumple el requisito formal y se presume el nexo causal",
+ o:["No, se rompe el nexo causal","No, es accidente común","Depende de la aseguradora"],
+ k:[["si"],["verbal","formal","presume"]],t:"Escrita → no AT. Verbal → sí AT.",m:"«Palabras se las lleva el viento… y el seguro igual paga»."},
+{s:"ins",a:"Art. 2.3 d)",q:"¿Es accidente de trabajo el ocurrido en actividades recreativas, deportivas o culturales dentro de la jornada?",
+ r:"d) No, el que se produzca con ocasión de actividades recreativas, deportivas o culturales, aunque se produzcan dentro de la jornada laboral o en el centro de trabajo. Esta exclusión se aplica sin considerar si la participación fue voluntaria u obligatoria, porque el riesgo inherente a un deporte (como una fractura jugando fútbol) se considera ajeno a los riesgos típicos de la labor contratada.",
+ c:"No, aunque sea dentro de la jornada y aunque la participación sea obligatoria",
+ o:["Sí, si es obligatoria","Sí, si es en el centro de trabajo","Sí, si lo organiza la empresa"],
+ k:[["no"],["voluntari","obligatori","ajeno","aunque"]],t:"Ej.: fractura jugando fútbol en el campeonato de la empresa.",m:"«Pelota y fiesta no los cubre la póliza»."},
+{s:"ins",a:"Art. 2.3 e)",q:"¿Es accidente de trabajo el que ocurre durante permisos, licencias o vacaciones?",
+ r:"e) No constituye accidente de trabajo el que sobrevenga durante los permisos, licencias, vacaciones o cualquier otra forma de suspensión del contrato de trabajo.",
+ c:"No, ni en cualquier otra forma de suspensión del contrato de trabajo",
+ o:["Sí, porque sigue siendo trabajador","Solo en licencia con goce","Solo si viaja por trabajo"],
+ k:[["no"],["suspension","permiso","licencia","vacacion"]],t:"",m:"«Contrato suspendido = seguro dormido»."},
+{s:"ins",a:"Art. 2.3 f)",q:"¿Qué se requiere para excluir un accidente por uso de alcohol o estupefacientes?",
+ r:"Requisito de la Causalidad: La aseguradora o el empleador deben demostrar que el estado etílico del trabajador fue la razón directa por la cual ocurrió el siniestro. Si el accidente hubiera ocurrido de todas formas debido a una falla técnica o a un riesgo no mitigado por la empresa, la sola presencia de alcohol podría no ser suficiente para anular la calificación de Accidente de Trabajo (AT) y la responsabilidad del empleador.",
+ c:"Demostrar que el estado etílico fue la razón directa del siniestro; la sola presencia de alcohol puede no ser suficiente",
+ o:["Basta con un dosaje positivo","Basta con superar 0.5 g/L","Basta la declaración del supervisor"],
+ k:[["causal","razon directa","demostrar"],["alcohol","etilico","no es suficiente","no basta"]],
+ t:"La jurisprudencia NO ha fijado un límite cuantitativo (como 0.25 o 0.5 g/L de tránsito).",
+ m:"«No basta oler a trago: el trago tiene que ser la causa»."},
+{s:"ins",a:"Art. 2.3 f)",q:"¿La jurisprudencia ha fijado un límite cuantitativo de alcohol para excluir el accidente?",
+ r:"La jurisprudencia se adhiere a la literalidad de la norma que habla de \"consecuencia del uso\" y no ha fijado un límite cuantitativo (como 0.25 o 0.5 g/L de alcohol en sangre, usados en tránsito).",
+ c:"No; se adhiere a la literalidad «consecuencia del uso» y no fija un límite como 0.25 o 0.5 g/L",
+ o:["Sí, 0.5 g/L","Sí, 0.25 g/L","Sí, 1 g/L"],
+ k:[["no"],["consecuencia del uso","literal","limite"]],t:"",m:"«Sin número mágico de alcohol»."},
+{s:"ins",a:"Art. 2.3 g)",q:"¿Por qué se excluyen los accidentes por guerra, motín, conmoción o terrorismo?",
+ r:"Ruptura del Nexo Causal: El accidente no se produce \"por causa o con ocasión del trabajo\", sino por un riesgo extraordinario, catastrófico y totalmente ajeno al empleador. Riesgo Asegurable: Los riesgos derivados de guerras, motines o actos de terrorismo son riesgos de la sociedad en general o riesgos extraordinarios, y están fuera del alcance de la protección social del trabajo.",
+ c:"Por ruptura del nexo causal: es un riesgo extraordinario, catastrófico y ajeno al empleador, de la sociedad en general",
+ o:["Porque el Estado los indemniza siempre","Porque ocurren de noche","Porque el SCTR solo cubre minería"],
+ k:[["nexo causal","ruptura"],["extraordinario","catastrofico","ajeno","sociedad"]],
+ t:"Ejemplo histórico: atentado de la calle Tarata (Miraflores) por Sendero Luminoso.",m:"«Bala perdida en motín = accidente común»."},
+{s:"ins",a:"Art. 2.3 h)",q:"¿Es accidente de trabajo el causado por terremoto, maremoto o erupción volcánica?",
+ r:"h) No. Los que se produzcan por efecto de terremoto, maremotos, erupción volcánica o cualquier otra convulsión de la naturaleza. El riesgo de estos eventos es extraordinario, catastrófico y afecta a la población en general, rompiendo el nexo causal con el riesgo específicamente laboral.",
+ c:"No; es un riesgo extraordinario que afecta a la población en general y rompe el nexo causal",
+ o:["Sí, si ocurre en la jornada","Sí, si el centro es de riesgo","Solo si el trabajador muere"],
+ k:[["no"],["extraordinario","poblacion","nexo","naturaleza"]],t:"Ejemplo: terremoto de Pisco, 15 de agosto de 2007, 6:41 p.m.",m:"«La naturaleza no firma planilla»."},
+{s:"ins",a:"Art. 2.3 i)",q:"¿Se cubren los accidentes por fusión o fisión nuclear?",
+ r:"i) No, los que se produzcan como consecuencia de fusión o fisión nuclear por efecto de la combustión de cualquier combustible nuclear, salvo cobertura especial expresa. Solo se cubriría si la empresa ha contratado una cobertura especial y explícita con la aseguradora.",
+ c:"No, salvo cobertura especial expresa contratada con la aseguradora",
+ o:["Sí, siempre","Sí, si es en minería","No, nunca bajo ninguna forma"],
+ k:[["no"],["cobertura especial","especial","expresa"]],t:"Ejemplo: los «liquidadores» de Chernóbil.",m:"«Nuclear = Nunca, salvo póliza especial»."},
+{s:"ins",a:"Exclusiones pactables",q:"¿Qué exclusiones se pueden pactar a la cobertura del SCTR?",
+ r:"a) Lesiones voluntariamente autoinfligidas o derivadas de tentativa de autoeliminación;\nb) Accidente de trabajo o enfermedad profesional de los trabajadores asegurables que no hubieren sido declarados por La Entidad Empleadora; cuyas lesiones se mantendrán amparadas por el Seguro Social de Salud a cargo del IPSS, de acuerdo con el Art. 88 del Decreto Supremo Nº 009-97-SA.\nc) Procedimientos o terapias que no contribuyen a la recuperación o rehabilitación del paciente de naturaleza cosmética, estética o suntuaria, cirugías electivas, cirugía plástica, odontología de estética, tratamiento de periodoncia y ortodoncia; curas de reposo y del sueño, lentes de contacto.",
+ c:"Lesiones autoinfligidas, trabajadores no declarados por el empleador y tratamientos cosméticos o estéticos",
+ o:["Accidentes en el comedor, fracturas y cortes","Enfermedades listadas y accidentes en misión","Cirugía reconstructiva por accidente de trabajo"],
+ k:[["autoinflig","autoeliminacion","voluntari"],["no declarados","no declarado"],["estetic","cosmetic","suntuari"]],
+ t:"Ojo: la cirugía plástica RECONSTRUCTIVA por accidente sí se cubre.",m:"«A-N-E»: Autoinfligidas, No declarados, Estética."},
+{s:"ins",a:"Exclusiones pactables",q:"¿Qué tratamiento de cirugía plástica sí debe cubrirse obligatoriamente?",
+ r:"Serán obligatoriamente cubiertos los tratamientos de cirugía plástica reconstructiva o reparativa exigibles como consecuencia de un accidente de trabajo o una enfermedad profesional.",
+ c:"La cirugía plástica reconstructiva o reparativa como consecuencia de un AT o EP",
+ o:["La cirugía estética electiva","La ortodoncia","Los lentes de contacto"],
+ k:[["reconstructiva","reparativa"]],t:"",m:"«Reconstruir sí, embellecer no»."},
+{s:"ins",a:"Contrato SCTR",q:"¿Dónde son exigibles los tratamientos médicos del SCTR y cuáles son las excepciones?",
+ r:"Salvo pacto en contrario, el contrato sólo es exigible respecto de tratamientos médicos practicados en el Perú; salvo el caso de emergencias amparadas por el seguro ocurridas en el extranjero o tratamientos médicos que no puedan ser practicados en el país, los cuales se atenderán según los costos usuales en el Perú por tratamientos similares.",
+ c:"Solo en el Perú, salvo emergencias en el extranjero o tratamientos que no puedan hacerse en el país (a costos usuales en Perú)",
+ o:["En cualquier país sin límite","Solo en Lima","Solo en clínicas de la EPS"],
+ k:[["peru"],["emergencia","extranjero","no puedan"]],t:"",m:"«Hecho en Perú, salvo emergencia afuera»."},
+{s:"ins",a:"Contrato SCTR",q:"Si se termina o resuelve el SCTR, ¿quién continúa la cobertura y qué no puede afectarse?",
+ r:"En cualquier caso de terminación o resolución del SCTR, la cobertura de los trabajadores continuará a cargo de Essalud hasta que se elija la nueva Entidad Prestadora que otorgue la cobertura de salud. La resolución del contrato no podrá implicar la interrupción de tratamientos en curso ni de algún otro modo afectar los derechos devengados a favor de LOS ASEGURADOS durante la vigencia del contrato.",
+ c:"EsSalud, hasta que se elija nueva entidad; no puede interrumpir tratamientos en curso ni afectar derechos devengados",
+ o:["El trabajador queda sin cobertura","La ONP, y se suspenden los tratamientos","El empleador, solo por 30 días"],
+ k:[["essalud"],["tratamiento","devengad","interrup"]],t:"Se pueden pactar cláusulas de suspensión o resolución por mora en el pago de la prima.",m:"«EsSalud es el colchón»."},
+// ================= TIPOS Y ENFERMEDAD PROFESIONAL =================
+{s:"ano",a:"Reglamento Ley SST",q:"Según su gravedad, ¿qué tipos de accidentes de trabajo con lesiones hay?",
+ r:"3.1. Accidentes leves\n3.2. Accidente incapacitante (3.2.1 Total Temporal, 3.2.2 Parcial Permanente, 3.2.3 Total Permanente)\n3.3. Accidente Mortal",
+ c:"Leve, incapacitante (total temporal, parcial permanente, total permanente) y mortal",
+ o:["Menor, mayor y catastrófico","Común, laboral y mixto","Temporal, definitivo y vitalicio"],
+ k:[["leve"],["incapacitante"],["mortal"]],t:"",m:"«L-I-M»: Leve, Incapacitante, Mortal → «LIMa»."},
+{s:"ano",a:"3.1",q:"¿Qué es un accidente leve?",
+ r:"3.1. Accidentes leves: Suceso cuya lesión, resultado de la evaluación médica, que genera en el accidentado un descanso breve con retorno máximo al día siguiente a sus labores habituales.",
+ c:"El que genera un descanso breve con retorno máximo al día siguiente",
+ o:["El que genera descanso de una semana","El que causa pérdida de un dedo","El que no requiere evaluación médica"],
+ k:[["descanso breve","breve"],["dia siguiente"]],t:"",m:"«Leve = mañana vuelves»."},
+{s:"ano",a:"3.2",q:"¿Qué es un accidente incapacitante y qué regla estadística tiene?",
+ r:"3.2. Accidente incapacitante: suceso cuya lesión, resultado de la evaluación médica, da lugar a descanso, ausencia justificada al trabajo y tratamiento. Para fines estadísticos, no se tomará en cuenta el día de ocurrido el accidente.",
+ c:"Da lugar a descanso, ausencia justificada y tratamiento; para estadística no se cuenta el día del accidente",
+ o:["Retorno al día siguiente; se cuenta el día del accidente","Produce la muerte; se cuenta la fecha del deceso","No requiere tratamiento"],
+ k:[["descanso","ausencia","tratamiento"],["no se tomara","no se cuenta","dia de ocurrido"]],t:"",m:"«Incapacitante: el día del accidente no cuenta»."},
+{s:"ano",a:"3.2.1 – 3.2.3",q:"Diferencia entre incapacidad total temporal, parcial permanente y total permanente.",
+ r:"3.2.1. Total Temporal: cuando la lesión genera en el accidentado la imposibilidad de utilizar su organismo; se otorgará tratamiento médico hasta su plena recuperación.\n3.2.2. Parcial Permanente: cuando la lesión genera la pérdida parcial de un miembro u órgano o de las funciones del mismo.\n3.2.3. Total Permanente: cuando la lesión genera la pérdida anatómica o funcional total de un miembro u órgano; o de las funciones del mismo. Se considera a partir de la pérdida del dedo meñique.",
+ c:"Total temporal: imposibilidad de usar su organismo hasta recuperarse; Parcial permanente: pérdida parcial; Total permanente: pérdida total (desde el dedo meñique)",
+ o:["Total temporal: pérdida del meñique; Parcial: muerte; Total: descanso breve","Las tres son iguales","Parcial permanente: desde el meñique"],
+ k:[["recuperacion","temporal"],["parcial"],["total","menique"]],
+ t:"¡Dato de examen! La total permanente se considera a partir de la pérdida del dedo MEÑIQUE.",
+ m:"«Desde el meñique ya es Total»: el dedo más chiquito marca lo más grave."},
+{s:"ano",a:"3.3",q:"¿Qué es un accidente mortal y qué fecha se considera para estadística?",
+ r:"3.3. Accidente Mortal: Suceso cuyas lesiones producen la muerte del trabajador. Para efectos estadísticos debe considerarse la fecha del deceso.",
+ c:"El que produce la muerte; para estadística se considera la fecha del deceso",
+ o:["Se considera la fecha del accidente","Se considera la fecha del sepelio","No se registra estadísticamente"],
+ k:[["muerte"],["deceso","fallecimiento"]],t:"Incapacitante: NO cuenta el día del accidente. Mortal: cuenta la fecha del DECESO.",m:"«Mortal cuenta el día de la muerte»."},
+{s:"ano",a:"Art. 3 D.S. 003-98-SA",q:"¿Qué es enfermedad profesional?",
+ r:"Se entiende como enfermedad profesional todo estado patológico permanente o temporal que sobreviene al trabajador como consecuencia directa de la clase de trabajo que desempeña o del medio en que se ha visto obligado a trabajar.",
+ c:"Todo estado patológico permanente o temporal que sobreviene como consecuencia directa de la clase de trabajo o del medio en que se ha visto obligado a trabajar",
+ o:["Todo suceso repentino que produce una lesión","Toda enfermedad que aparece durante el contrato","Solo las enfermedades por químicos"],
+ k:[["estado patologico","patologic"],["permanente","temporal"],["clase de trabajo","medio","consecuencia directa"]],
+ t:"Inc. n) del Art. 2 del D.S. 009-97-SA.",m:"«Enfermedad = el trabajo te Enferma poco a poco»."},
+{s:"ano",a:"Art. 3",q:"¿Quién aprueba la tabla de enfermedades profesionales y a propuesta de quién?",
+ r:"La tabla de Enfermedades Profesionales y su vinculación causal con la clase de trabajo que la origina será aprobada por el Ministerio de Salud, a propuesta de la Comisión Técnica Médica a que se refiere el Art. 30 del presente Decreto Supremo.",
+ c:"El Ministerio de Salud, a propuesta de la Comisión Técnica Médica",
+ o:["El Ministerio de Trabajo, a propuesta de SUNAFIL","La SBS, a propuesta de las aseguradoras","EsSalud, a propuesta de la ONP"],
+ k:[["ministerio de salud","minsa"],["comision tecnica"]],t:"",m:"«Salud aprueba, la Comisión propone»."},
+{s:"ano",a:"Art. 3",q:"Si una enfermedad no aparece en la tabla de enfermedades profesionales, ¿puede reconocerse como tal?",
+ r:"En caso que una enfermedad no aparezca en la Tabla de Enfermedades Profesionales, pero se demuestre que existe relación de causalidad con la clase de trabajo que desempeña el trabajador o el ambiente en que labora, será reconocida como Enfermedad Profesional.",
+ c:"Sí, si se demuestra relación de causalidad con la clase de trabajo o el ambiente en que labora",
+ o:["No, nunca","Solo si la aprueba el Congreso","Solo si el trabajador fallece"],
+ k:[["si"],["causalidad","causal","relacion"]],t:"La lista no es cerrada (numerus apertus).",m:"«No está en la lista, pero si pruebas el nexo, entra»."},
+{s:"ano",a:"NTS 068-MINSA",q:"¿En qué norma está el listado de enfermedades profesionales?",
+ r:"El listado de enfermedades profesionales está contenido en la Norma Técnica de Salud N° 068-MINSA/DGSP-V.1, aprobada por la Resolución Ministerial N° 480-2008-MINSA.",
+ c:"NTS N° 068-MINSA/DGSP-V.1, aprobada por la R.M. N° 480-2008-MINSA",
+ o:["D.S. 003-98-SA","Ley 29783","R.M. 050-2013-TR"],
+ k:[["068"],["480"],["2008"]],t:"",m:"«068 y 480 del 2008»: «cero seis ocho, cuatro ocho cero» (casi espejo)."},
+{s:"ano",a:"NTS 068-MINSA",q:"¿En qué grupos organiza el listado las enfermedades profesionales según el agente causal?",
+ r:"Causadas por Agentes Químicos.\nCausadas por Agentes Físicos (como ruido, vibración, radiaciones).\nCausadas por Agentes Biológicos.\nCausadas por Inhalación de sustancias (como neumoconiosis).\nEnfermedades de la Piel.\nEnfermedades causadas por Agentes Carcinogénicos.",
+ c:"Agentes químicos, físicos, biológicos, inhalación de sustancias, enfermedades de la piel y agentes carcinogénicos",
+ o:["Psicosociales, estrés y burnout","Solo físicos y químicos","Leves, graves y mortales"],
+ k:[["quimic"],["fisic"],["biologic"],["inhalacion","neumoconiosis"],["piel"],["carcinog","cancer"]],
+ t:"No hay grupo de riesgos psicosociales.",m:"«Química Física Bio, Inhalo, Piel y Cáncer» → «QFB-IPC»."},
+{s:"ano",a:"Burnout",q:"¿La Norma Técnica de 2008 incluye el Burnout? ¿Qué pasó con la OMS?",
+ r:"La Norma Técnica de 2008 no incluye una categoría para enfermedades causadas por riesgos psicosociales o estrés laboral crónico como el Burnout. Aunque la Organización Mundial de la Salud (OMS) incluyó el Burnout en su Clasificación Internacional de Enfermedades (CIE-11) como un \"fenómeno ocupacional\", esta inclusión internacional aún no ha generado una modificación formal del listado oficial peruano para el SCTR.",
+ c:"No lo incluye; la OMS lo incluyó en la CIE-11 como «fenómeno ocupacional», pero no se modificó el listado peruano",
+ o:["Sí, desde 2008","Sí, por la Ley 31025","No, y la OMS tampoco lo reconoce"],
+ k:[["no"],["cie-11","cie 11","cie","fenomeno ocupacional","oms"]],t:"Para cubrirlo se requiere sustentación médica y legal muy sólida.",m:"«Burnout: la OMS lo ve, el Perú todavía no»."},
+{s:"ano",a:"Ley 31025",q:"¿Qué reconoce la Ley N° 31025 sobre el COVID-19?",
+ r:"La Ley N° 31025 (publicada en junio de 2020) reconoce la enfermedad causada por el COVID-19 como una enfermedad profesional exclusivamente para los servidores de la salud.",
+ c:"Reconoce el COVID-19 como enfermedad profesional exclusivamente para los servidores de la salud",
+ o:["Para todos los trabajadores","Para los trabajadores de minería","Lo excluye del SCTR"],
+ k:[["covid"],["salud","servidores"],["exclusiv","solo"]],
+ t:"Los demás deben probar exposición directa a riesgo biológico propio de su actividad.",m:"«31025: COVID solo para batas blancas»."},
+// ================= PENSIONES Y PRESTACIONES =================
+{s:"pub",a:"Invalidez",q:"¿Qué es la invalidez en el SCTR?",
+ r:"Estado de incapacidad total o parcial para el trabajo habitual ocasionada por accidente de trabajo o enfermedad profesional, teniendo en cuenta factores asociados a la disminución orgánica, funcional o mental tales como edad, educación y experiencia laboral.",
+ c:"Incapacidad total o parcial para el trabajo habitual por AT o EP, considerando edad, educación y experiencia laboral",
+ o:["Cualquier enfermedad común","Solo la pérdida de un miembro","La jubilación anticipada"],
+ k:[["incapacidad"],["total","parcial"],["edad","educacion","experiencia"]],
+ t:"Una misma lesión pesa más en alguien de 55 años que en uno de 25.",m:"«E-E-E»: Edad, Educación, Experiencia."},
+{s:"pub",a:"Remuneración mensual",q:"¿Sobre qué base se calculan los montos de pensión del SCTR?",
+ r:"Los montos de pensión serán calculados sobre el 100% de la \"Remuneración Mensual\" del ASEGURADO, entendida como el promedio de las remuneraciones asegurables de los 12 meses anteriores al siniestro.",
+ c:"Sobre el 100% de la remuneración mensual: promedio de las remuneraciones asegurables de los 12 meses anteriores al siniestro",
+ o:["Sobre el último sueldo","Sobre el promedio de 36 meses","Sobre la remuneración mínima vital"],
+ k:[["100"],["promedio"],["12","doce"]],t:"Aplica tanto a invalidez como a sobrevivencia. Si trabajó menos de 12 meses, se promedian los meses laborados.",m:"«12 meses, 100%»: un año completo, al cien."},
+{s:"pub",a:"Remuneración asegurable",q:"¿Qué se considera remuneración asegurable para trabajadores dependientes?",
+ r:"En el caso de los trabajadores dependientes, se considera remuneración asegurable a la remuneración computable a que se refiere el Texto Único Ordenado de la Ley de Compensación por Tiempo de Servicios, aprobado por Decreto Supremo N° 001-97-TR.",
+ c:"La remuneración computable del TUO de la Ley de CTS (D.S. 001-97-TR)",
+ o:["El sueldo neto después de descuentos","La RMV","La remuneración de la planilla de EsSalud"],
+ k:[["computable"],["cts","compensacion","001-97"]],t:"",m:"«Asegurable = la misma de la CTS»."},
+{s:"pub",a:"RMA",q:"¿Cuál es el tope de la Remuneración Máxima Asegurable (RMA) y quién lo fija?",
+ r:"La Remuneración Asegurable de cada mes no puede exceder del tope de la Remuneración Máxima Asegurable (RMA) fijada por la Superintendencia de Banca, Seguros y AFP (SBS). El tope es de S/ 12,178.56 vigente para el cuarto trimestre de 2025 (Octubre-Diciembre de 2025).",
+ c:"La fija la SBS; S/ 12,178.56 para el cuarto trimestre de 2025",
+ o:["La fija SUNAFIL; S/ 1,130","La fija el MEF; S/ 5,350","La fija la ONP; S/ 20,000"],
+ k:[["sbs","superintendencia"],["12,178","12178","12 178"]],t:"Se actualiza cada trimestre.",m:"«12-1-7-8»: doce mil, y luego 1-7-8 en escalera."},
+{s:"pub",a:"Invalidez temporal",q:"¿Hasta cuándo se paga la pensión por invalidez temporal y cómo se determina si es temporal o permanente?",
+ r:"En caso de Invalidez temporal, \"LA ASEGURADORA\" pagará al \"ASEGURADO\" la pensión mensual que corresponda, según el grado total o parcial de la invalidez, hasta el mes en que se produzca su recuperación. El carácter temporal o permanente de la invalidez, se determina en función al grado de recuperabilidad que puede tener una persona al sucederle un siniestro.",
+ c:"Hasta el mes en que se produzca su recuperación; se determina por el grado de recuperabilidad",
+ o:["Por 12 meses fijos; se determina por la edad","De por vida; se determina por el sueldo","Hasta los 65 años; se determina por los aportes"],
+ k:[["recuperacion"],["recuperabilidad"]],t:"",m:"«Temporal = hasta que te Recuperes»."},
+{s:"pub",a:"Requisitos",q:"¿Qué documentos acreditan el siniestro y la relación laboral para pedir la pensión de invalidez?",
+ r:"Solicitud de Pensión; Documento de Identidad (DNI); Acreditación de la Relación Laboral (Certificado de Trabajo o Contratos de Trabajo; Planillas de Pago o Declaración Jurada del Empleador); Aviso de Accidente de Trabajo; Informe Detallado del Accidente.",
+ c:"Solicitud, DNI, acreditación de la relación laboral, aviso de accidente de trabajo e informe detallado del accidente",
+ o:["Partida de nacimiento y antecedentes penales","Certificado de estudios y CV","Solo el DNI"],
+ k:[["solicitud"],["dni"],["relacion laboral","certificado de trabajo","contrato","planilla"],["aviso","informe"]],t:"",m:"«S-D-R-A-I»: Solicitud, DNI, Relación, Aviso, Informe."},
+{s:"pub",a:"CMI",q:"¿Qué es el Certificado Médico de Invalidez (CMI), quién lo emite y qué debe indicar?",
+ r:"Certificado Médico de Invalidez (CMI): Documento emitido por una Comisión Médica Evaluadora de EsSalud, del Ministerio de Salud (MINSA) o de una Entidad Prestadora de Salud (EPS) acreditada. Debe indicar: el Diagnóstico de las lesiones y la relación causal con el accidente de trabajo; la Fecha de inicio de la invalidez o del fin del periodo de incapacidad temporal; el Porcentaje de Menoscabo de su capacidad para el trabajo.",
+ c:"Lo emite una Comisión Médica de EsSalud, MINSA o EPS; indica diagnóstico y relación causal, fecha de inicio y porcentaje de menoscabo",
+ o:["Lo emite el empleador; indica el sueldo","Lo emite la SBS; indica la prima","Lo emite el juez; indica la indemnización"],
+ k:[["comision medica","essalud","minsa","eps"],["diagnostico","causal"],["fecha"],["menoscabo","porcentaje"]],
+ t:"Es el requisito MÁS CRÍTICO: determina el derecho y el monto.",m:"«D-F-M»: Diagnóstico, Fecha, Menoscabo."},
+{s:"pub",a:"Preguntas frecuentes",q:"¿Se exige un mínimo de aportes para acceder a la pensión de invalidez del SCTR?",
+ r:"No existe un requisito de tiempo mínimo de aportación (periodo de carencia) como sí ocurre en el Sistema Nacional de Pensiones (D.L. 19990) o el Sistema Privado de Pensiones (SPP). El derecho se basa en la contingencia del riesgo laboral, no en la acumulación de aportes en el tiempo.",
+ c:"No; no hay periodo de carencia. El derecho se basa en la contingencia del riesgo laboral",
+ o:["Sí, 20 años como en el SNP","Sí, 12 meses de aportes","Sí, 5 años como en el SPP"],
+ k:[["no"],["carencia","aportes","contingencia","riesgo"]],t:"Lo que importa: póliza VIGENTE al momento del AT o del diagnóstico de la EP, y exposición al riesgo.",m:"«SCTR no cuenta años, cuenta riesgos»."},
+{s:"pub",a:"Preguntas frecuentes",q:"¿Cuáles son los criterios para generar el derecho a la pensión del SCTR?",
+ r:"Vigencia de la Póliza: El SCTR debe haber estado vigente en el momento en que ocurrió el Accidente de Trabajo (AT) o en la fecha del diagnóstico o inicio de la invalidez generada por la Enfermedad Profesional (EP).\nExposición al Riesgo: El asegurado debe haber estado realizando una actividad considerada de alto riesgo (Anexo 5 del D.S. N° 009-97-SA) o encontrarse en el centro de trabajo de riesgo.",
+ c:"Vigencia de la póliza al momento del siniestro y exposición al riesgo",
+ o:["20 años de aportes y 65 años de edad","Contrato indefinido y planilla","Afiliación a una AFP"],
+ k:[["vigencia","vigente","poliza"],["exposicion","riesgo"]],t:"",m:"«V-E»: Vigente y Expuesto."},
+{s:"pub",a:"Preguntas frecuentes",q:"Si la póliza del SCTR no está vigente, ¿quién asume la responsabilidad?",
+ r:"El empleador está obligado a asumir directamente y por completo todas las prestaciones económicas y asistenciales que debió cubrir el SCTR. La falta de contratación del SCTR, o el impago de las primas que lleve a la pérdida de cobertura, constituye una infracción muy grave. SUNAFIL puede imponer multas elevadas.",
+ c:"El empleador, directamente y por completo; además es infracción muy grave sancionada por SUNAFIL",
+ o:["Nadie, el trabajador pierde el derecho","EsSalud, sin costo para el empleador","La ONP con fondos públicos"],
+ k:[["empleador"],["completo","todas","directamente"],["muy grave","sunafil","multa"]],t:"",m:"«Sin póliza, paga el jefe… y encima lo multan»."},
+{s:"pub",a:"Art. 18.1",q:"¿En qué casos se paga la pensión de sobrevivencia?",
+ r:"a) Ocasionado directamente por un accidente de trabajo o enfermedad profesional; o,\nb) Por cualquier otra causa posterior después de configurada la invalidez o mientras se encuentre gozando de una pensión de invalidez, parcial o total, temporal o permanente; o,\nc) Producido mientras EL ASEGURADO se encontrara gozando de subsidio por incapacidad temporal a cargo del Seguro Social de Salud como consecuencia de un accidente o enfermedad profesional siempre que la causa de la muerte se encuentre relacionada directamente con el accidente o enfermedad profesional.",
+ c:"Muerte por AT/EP; muerte por cualquier causa después de configurada la invalidez o gozando de pensión; muerte gozando de subsidio si se relaciona con el AT/EP",
+ o:["Solo si muere en el centro de trabajo","Solo si tenía 20 años de aportes","Por cualquier muerte del trabajador aunque no tenga relación"],
+ k:[["accidente","enfermedad profesional"],["invalidez","pension","cualquier otra causa"],["subsidio"]],
+ t:"Caso b): una vez inválido, muera de lo que muera, hay sobrevivencia.",m:"«Muere por el trabajo, ya siendo inválido o con subsidio»."},
+{s:"pub",a:"Art. 18.1.3",q:"Si concurren cónyuge o conviviente e hijos y el total excede el 100%, ¿qué pasa?",
+ r:"Cuando existan cónyuge o conviviente e hijos del \"ASEGURADO\" con derecho a pensión de sobrevivencia, éstos gozarán la que les corresponde en forma concurrente; pero si el monto total excede el 100% de la \"Remuneración Mensual\" del \"ASEGURADO\" dichas pensiones quedarán reducidas proporcionalmente de modo tal que, en conjunto, no superen dicha \"Remuneración Mensual\".",
+ c:"Gozan en forma concurrente, pero se reducen proporcionalmente para no superar el 100% de la remuneración mensual",
+ o:["El cónyuge recibe todo y los hijos nada","Se paga el exceso sin límite","Los hijos tienen preferencia y el cónyuge nada"],
+ k:[["concurrente"],["reduc","proporcional"],["100"]],t:"",m:"«La torta es del 100%: si no alcanza, se corta en pedazos más chicos»."},
+{s:"pub",a:"Art. 18.1.4",q:"Cuando concurren cónyuge o conviviente y padres, ¿se aplica el recálculo del 18.1.3?",
+ r:"Cuando existan cónyuge o conviviente y padres del \"ASEGURADO\" con derecho a pensión de sobrevivencia, éstos concurrirán en el goce de las pensiones que les corresponda, sin lugar al recálculo previsto en el Artículo 18.1.3.",
+ c:"No; concurren sin lugar al recálculo",o:["Sí, se reduce proporcionalmente","Los padres quedan excluidos","El cónyuge queda excluido"],
+ k:[["sin","no"],["recalculo"]],t:"",m:"«Cónyuge + padres: cada uno su parte, sin recalcular»."},
+{s:"pub",a:"Art. 18.1.5 – 18.1.6",q:"Cuando concurren hijos y padres (o cónyuge, hijos y padres), ¿cuándo cobran los padres?",
+ r:"18.1.5 Cuando sólo existan hijos y padres, todos los hijos concurrirán en el goce de la pensión que les corresponda; pero la pensión de los padres sólo procederá si quedará algún remanente.\n18.1.6 Cuando existan cónyuge o conviviente, hijos y padres; los padres gozarán de las pensiones que les corresponda, sólo si quedara algún remanente luego de aplicar el Art. 18.1.3.",
+ c:"Solo si queda algún remanente",o:["Siempre, con prioridad","Nunca","Solo si los hijos son mayores de edad"],
+ k:[["remanente","sobra","queda"]],t:"Los padres van al final de la fila cuando hay hijos.",m:"«Con hijos en casa, los papás comen lo que sobra»."},
+{s:"pub",a:"Art. 18.1.7",q:"Si no hay cónyuge o conviviente y hay dos o más hijos, ¿cómo se incrementa la pensión?",
+ r:"De no existir cónyuge o conviviente con derecho a pensión, el porcentaje de la remuneración se asignará como pensión en caso que quedare un solo hijo como beneficiario, aunque existan padres. De haber dos o más hijos con derecho a pensión, la pensión conjunta se incrementará en 14 puntos porcentuales sobre el porcentaje referido, tantas veces como hijos hubiese, distribuyéndose en partes iguales; pero la pensión de los padres sólo procederá si quedara algún remanente.",
+ c:"Se incrementa en 14 puntos porcentuales tantas veces como hijos hubiese, distribuyéndose en partes iguales",
+ o:["Se incrementa 10 puntos por hijo","Se incrementa 50% en total","No se incrementa"],
+ k:[["14","catorce"],["iguales","por hijo","tantas veces"]],t:"",m:"«14 puntos por cada hijo»: 14 = dos semanas de cariño por hijo."},
+{s:"pub",a:"Gastos de sepelio",q:"¿Qué rubros comprenden los gastos de sepelio?",
+ r:"Ataúd / Urna: El costo del féretro o del ataúd para la cremación.\nServicios Funerarios: El alquiler de la capilla ardiente o el servicio de velatorio.\nServicios de Salubridad: Incluye los pagos por el certificado médico de defunción y los derechos sanitarios.\nTrámites y Traslado: Costos administrativos y el traslado del cuerpo.\nEntierro/Cremación: Los gastos del nicho, fosa, o el servicio de cremación.",
+ c:"Ataúd/urna, servicios funerarios, servicios de salubridad, trámites y traslado, y entierro/cremación",
+ o:["Deudas del fallecido y alquiler de su casa","Pensión de los hijos y gratificaciones","Solo el ataúd"],
+ k:[["ataud","urna","feretro"],["funerario","velatorio","capilla"],["salubridad","certificado","defuncion"],["traslado","tramite"],["entierro","cremacion","nicho"]],
+ t:"",m:"«A-F-S-T-E»: «A Fin, Se Trasladan y Entierran»."},
+// ================= JURISPRUDENCIA Y CASOS =================
+{s:"jur",a:"VI Pleno Laboral",q:"¿Qué estableció el VI Pleno Jurisdiccional Laboral y Previsional sobre la responsabilidad del empleador?",
+ r:"El VI Pleno Jurisdiccional Laboral y Previsional estableció que el empleador, como garante de la seguridad y salud en el centro laboral, siempre será responsable por cualquier evento dañoso para la vida o salud del trabajador.",
+ c:"Que el empleador, como garante de la seguridad y salud, siempre será responsable por cualquier evento dañoso para la vida o salud del trabajador",
+ o:["Que el empleador solo responde si hay dolo","Que la responsabilidad es del trabajador","Que solo responde la aseguradora"],
+ k:[["garante"],["siempre"],["responsable"]],t:"",m:"«VI Pleno: el jefe es el Garante, Siempre»."},
+{s:"jur",a:"Cas. Lab. 12060-2015",q:"Cas. Lab. 12060-2015 (La Libertad): trabajador herido de bala durante un asalto al vehículo de la empresa. ¿Es accidente de trabajo?",
+ r:"El hecho que el actor se encuentre dentro del vehículo propiedad de la demandada en el horario habitual de trabajo sin realizar labor alguna no rompe la relación de causalidad, pues por razón del contrato de trabajo se encontraba transportando los productos para ser comercializados, siendo en dicha circunstancia en que se produjo el asalto; daño sufrido que califica como un accidente de trabajo, al haber ocurrido con ocasión del cumplimiento de sus obligaciones derivadas del contrato de trabajo.",
+ c:"Sí; estar en el vehículo de la empresa en horario habitual no rompe la causalidad, ocurrió con ocasión de sus obligaciones",
+ o:["No, porque no estaba realizando labor","No, porque lo causó un tercero","No, porque fue fuera del centro de trabajo"],
+ k:[["si","accidente de trabajo"],["no rompe","causalidad","ocasion","obligaciones"]],t:"Aplica el supuesto de «acción de tercera persona».",m:"«Asalto en el carro de la empresa = laboral»."},
+{s:"jur",a:"Cas. Lab. 3591-2016",q:"¿Qué estableció la Cas. Lab. 3591-2016 (Del Santa) sobre el infarto en horario de trabajo?",
+ r:"La Corte Suprema peruana estableció el criterio de que el infarto que ocurre durante la jornada de trabajo debía ser considerado un ACCIDENTE DE TRABAJO. Nexo Causal por Esfuerzo: el infarto se activó o se precipitó por el esfuerzo o el estrés inherente a la realización del trabajo. Omisión de Prevención: el fallecimiento en el centro de trabajo era una prueba de que la empresa incumplió su deber de prevención.",
+ c:"Que el infarto durante la jornada debe considerarse accidente de trabajo (nexo causal por esfuerzo y omisión de prevención)",
+ o:["Que el infarto siempre es enfermedad común","Que solo es AT si hubo golpe","Que la responsabilidad es de EsSalud"],
+ k:[["infarto"],["accidente de trabajo"],["esfuerzo","estres","prevencion"]],
+ t:"Caso: pescador en la embarcación pesquera cumpliendo órdenes.",m:"«3591: Corazón del pescador = accidente»."},
+{s:"jur",a:"Cas. 11800-2017-Cusco",q:"¿Cuál es el criterio actual (más estricto) sobre el infarto en el trabajo?",
+ r:"Jurisprudencia posterior (como la Casación N° 11800-2017-Cusco) ha tendido a ser más restrictiva, indicando que no toda muerte por causas naturales (como un infarto) que ocurre en el centro de trabajo es automáticamente un accidente laboral. La parte demandante debe demostrar que la labor realizada en ese momento o el esfuerzo (físico o mental) al que estaba sujeto el trabajador fue el factor precipitante o desencadenante del evento.",
+ c:"No todo infarto en el trabajo es automáticamente AT; el demandante debe probar que la labor o el esfuerzo fue el factor precipitante",
+ o:["Todo infarto en el trabajo es AT automáticamente","El infarto nunca es AT","Lo decide la aseguradora"],
+ k:[["no todo","automatic","no es automatic"],["demostrar","probar"],["precipitante","desencadenante"]],
+ t:"Si es desarrollo natural de una patología preexistente sin conexión con la labor → enfermedad común.",m:"«Cusco 2017: hay que probar que el trabajo disparó el infarto»."},
+{s:"jur",a:"Res. 082-2021-Sunafil",q:"Res. 082-2021-Sunafil: trabajador con lumbalgia cae al cargar una caja de 5 kg. ¿Qué se concluyó y en qué se basó?",
+ r:"Según el informe de evaluación ergonómica (aplicación ISO 11228-1), con un peso superior a 3 kg. se puede entrañar el potencial de causar daño a la salud de los trabajadores; quedando determinado que el levantar una caja de 5 kg. sí implica la posibilidad de causar daño a la salud del trabajador.",
+ c:"Que levantar 5 kg sí puede causar daño, pues según la ISO 11228-1 más de 3 kg puede dañar la salud",
+ o:["Que 5 kg es insignificante y es enfermedad común","Que la lumbalgia excluye el AT","Que se aplica el SOAT"],
+ k:[["3","tres"],["iso","11228"],["5","cinco","dano"]],t:"El mismo informe de la empresa la perjudicó.",m:"«Más de 3 kilos ya pesa en la ley»."},
+{s:"jur",a:"Res. 287-2021-Sunafil",q:"Res. 287-2021-Sunafil: secretaria tropieza con el cableado de la computadora. ¿Por qué fue atribuible al empleador?",
+ r:"Fue ocasionado por el cableado eléctrico de los equipos de cómputo, hecho atribuible a la inspeccionada, por cuanto había identificado en la matriz IPER el peligro locativo \"cableado eléctrico de equipos de cómputo debajo de los escritorios\" pese a lo cual no se implantó ductos para el cableado.",
+ c:"Porque había identificado el peligro en la matriz IPER y no implantó ductos para el cableado",
+ o:["Porque la secretaria no tenía SCTR","Porque fue fuera de horario","Porque no hubo testigos"],
+ k:[["iper","matriz"],["ducto","cableado","no implanto"]],t:"IPER = Identificación de Peligros y Evaluación de Riesgos.",m:"«Lo viste en el IPER y no lo arreglaste = tu culpa»."},
+{s:"jur",a:"Precedentes TC",q:"¿Qué precedentes vinculantes del TC se mencionan sobre la pensión por invalidez del SCTR?",
+ r:"1. EXPDS. N° 06612-2005-PA/TC y 10087-2005-PA/TC: Pensión Vitalicia y Pensión por Invalidez.\n2. EXPDS. N° 02513-2007-PA/TC: Amparo, Pensión de Invalidez y Pensión Vitalicia del SCTR.",
+ c:"Exp. 06612-2005-PA/TC y 10087-2005-PA/TC; y Exp. 02513-2007-PA/TC",
+ o:["Exp. 00964-2018-PHC/TC","Exp. 05854-2005-PA/TC","Exp. 00228-2009-PA/TC"],
+ k:[["6612","06612","10087"],["2513","02513"]],t:"También se menciona el Exp. 01816-2011-PA/TC (Moquegua, Carapi Mendiguri).",m:"«2005 doble (6612 y 10087) y 2007 (2513)»."},
+{s:"jur",a:"Conclusiones",q:"¿Qué comprende el SCTR Salud y el SCTR Pensión según las conclusiones?",
+ r:"SCTR Salud: Brinda atención médica, farmacológica, hospitalaria, quirúrgica y rehabilitación al 100%, sin límite ni copago, desde la primera atención hasta la recuperación total.\nSCTR Pensión: Otorga prestaciones económicas (pensiones de invalidez, sobrevivencia o indemnización) al trabajador o sus beneficiarios en caso de menoscabo de la capacidad laboral o fallecimiento.",
+ c:"Salud: atención médica, farmacológica, hospitalaria, quirúrgica y rehabilitación al 100% sin copago; Pensión: invalidez, sobrevivencia o indemnización",
+ o:["Salud: subsidios; Pensión: jubilación","Salud: solo emergencias; Pensión: solo sepelio","Ambos los da la ONP"],
+ k:[["100","sin limite","sin copago"],["rehabilitacion","medica","hospitalaria"],["invalidez","sobreviv","indemniz"]],
+ t:"Dos componentes inseparables, provistos por entidades distintas (EsSalud/EPS y ONP/aseguradoras).",m:"«Salud cura al 100%, Pensión te sostiene»."},
+{s:"jur",a:"Conclusiones",q:"¿Bajo qué principio opera el SCTR según el cierre de la sesión?",
+ r:"El SCTR no solo es una obligación legal, sino un instrumento de justicia social que opera bajo el principio de la responsabilidad objetiva del riesgo, asegurando la protección sin necesidad de probar la culpa del empleador o del trabajador.",
+ c:"Bajo el principio de la responsabilidad objetiva del riesgo, sin necesidad de probar la culpa",
+ o:["Responsabilidad subjetiva por dolo","Principio de autonomía de la voluntad","Principio de libre contratación"],
+ k:[["responsabilidad objetiva","objetiva"],["culpa","sin necesidad"]],t:"",m:"«Objetiva = no busco culpables, busco proteger»."},
+{s:"jur",a:"Taller",q:"¿Cuáles son las obligaciones clave del empleador de riesgo, la aseguradora/ONP y el trabajador ante el SCTR?",
+ r:"Empleador de Riesgo: 1. Contratar obligatoriamente el SCTR para sus trabajadores. 2. Pagar la prima. 3. Identificar y gestionar los riesgos. (Incumplimiento: sanciones administrativas, responsabilidad solidaria por las prestaciones.)\nEntidad Emisora (Aseguradora/ONP): 1. Otorgar y administrar las prestaciones económicas y/o de salud. 2. Emitir la póliza. (Incumplimiento: posible fiscalización de la SBS/mal servicio.)\nTrabajador (Afiliado): 1. Cumplir con las normas de seguridad y salud en el trabajo. 2. Reportar accidentes. (Incumplimiento: puede afectar el proceso de reclamación de la prestación.)",
+ c:"Empleador: contratar, pagar la prima y gestionar riesgos; Aseguradora: otorgar prestaciones y emitir póliza; Trabajador: cumplir normas SST y reportar accidentes",
+ o:["Empleador: reportar; Aseguradora: pagar la prima; Trabajador: emitir póliza","Todos solo deben pagar la prima","El trabajador paga la prima y el empleador reporta"],
+ k:[["contratar","prima"],["poliza","prestaciones"],["reportar","normas"]],t:"",m:"«Jefe Contrata y Paga, Aseguradora Emite y Otorga, Trabajador Cumple y Reporta»."}
+];
+
+const SECTIONS = {dia:"Qué es el SCTR y normativa",cal:"Coberturas y asegurados",tac:"Accidente de trabajo",ins:"Exclusiones",ano:"Tipos de accidente y enfermedad profesional",pub:"Pensiones y prestaciones",jur:"Jurisprudencia y conclusiones"};
+
+/* ===================== CALIFICACIÓN ===================== */
+function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[°º]/g," ").replace(/[^a-z0-9ñ]+/g," ").replace(/\s+/g," ").trim();}
+const NUMW={"uno":"1","un":"1","dos":"2","tres":"3","cuatro":"4","cinco":"5","seis":"6","diez":"10","treinta":"30","sesenta":"60"};
+function hasAlt(text,alt){
+  const a=norm(alt); if(!a) return false;
+  if(a.length<=3 || /^\d+$/.test(a)){return (" "+text+" ").includes(" "+a+" ");}
+  return text.includes(a);
+}
+function grade(q,ans){
+  let t=norm(ans);
+  // números en palabras -> dígitos (sin reemplazar el original)
+  t = t+" "+t.split(" ").map(w=>NUMW[w]||"").filter(Boolean).join(" ");
+  const res=q.k.map(g=>({label:g[0],hit:g.some(alt=>hasAlt(t,alt))}));
+  const hits=res.filter(r=>r.hit).length;
+  const ratio=res.length?hits/res.length:0;
+  return {res,ratio,ok: norm(ans).length>=1 && ratio>=0.6};
+}
+
+/* ===================== ESTADO ===================== */
+const LS="ss1-settings-v1";
+let settings={mode:"write",secs:60,timer:true,shuffle:true,sections:Object.keys(SECTIONS),count:0};
+try{const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s) settings=Object.assign(settings,s);}catch(e){}
+function save(){try{localStorage.setItem(LS,JSON.stringify(settings));}catch(e){}}
+
+let S=null; // sesión
+let tick=null;
+const app=document.getElementById("app");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+/* ===================== PANTALLA INICIO ===================== */
+function home(){
+  stopTimer();
+  const avail=BANK.filter(q=>settings.sections.includes(q.s)).length;
+  app.innerHTML=`
+  <header class="stack" style="gap:8px">
+    <div class="eyebrow">Derecho a la Seguridad Social · I Unidad</div>
+    <h1>Simulador de examen</h1>
+    <p class="muted" style="margin:0;max-width:60ch">${BANK.length} preguntas sacadas de tu material sobre el Seguro Complementario de Trabajo de Riesgo (Ley 26790, D.S. 009-97-SA, D.S. 003-98-SA, Ley 29783 y jurisprudencia). Al final se repiten las que falles hasta que las respondas bien.</p>
+  </header>
+  <section class="card stack">
+    <h2>¿Cómo quieres estudiar?</h2>
+    <div class="modes">
+      <button class="mode" id="m-write" aria-pressed="${settings.mode==='write'}"><b>✍️ Rellenar</b><span>Escribes con tus propias palabras. Te califico por palabras clave.</span></button>
+      <button class="mode" id="m-mc" aria-pressed="${settings.mode==='mc'}"><b>☑️ Marcar</b><span>Eliges entre 4 alternativas.</span></button>
+      <button class="mode" id="m-fc" aria-pressed="${settings.mode==='flash'}"><b>🃏 Flashcards</b><span>Volteas la tarjeta y te autoevalúas. Las que no sabes se repiten.</span></button>
+    </div>
+  </section>
+  <section class="card stack">
+    <h2>Cronómetro</h2>
+    <label class="check"><input type="checkbox" id="tOn" ${settings.timer?'checked':''}> Activar cronómetro por pregunta</label>
+    <div class="grid2">
+      <label class="f">Segundos por pregunta<input type="number" id="secs" min="5" max="900" step="5" value="${settings.secs}"></label>
+      <label class="f">Atajo<select id="preset"><option value="">Elegir…</option><option>20</option><option>30</option><option>45</option><option>60</option><option>90</option><option>120</option><option>180</option></select></label>
+    </div>
+    <p class="foot" style="margin:0">Si se acaba el tiempo, la pregunta cuenta como fallada y vuelve en el repaso.</p>
+  </section>
+  <section class="card stack">
+    <h2>Temas</h2>
+    <div class="chips" id="secs-chips">${Object.entries(SECTIONS).map(([k,v])=>`<button class="chip" data-s="${k}" aria-pressed="${settings.sections.includes(k)}">${v} <span class="muted">(${BANK.filter(q=>q.s===k).length})</span></button>`).join("")}</div>
+    <div class="grid2">
+      <label class="f">Cantidad de preguntas<select id="count">
+        <option value="0" ${settings.count==0?'selected':''}>Todas las seleccionadas (${avail})</option>
+        ${[10,20,30,50].filter(n=>n<avail).map(n=>`<option value="${n}" ${settings.count==n?'selected':''}>${n}</option>`).join("")}
+      </select></label>
+      <label class="check" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="shuf" ${settings.shuffle?'checked':''}> Orden aleatorio</label>
+    </div>
+  </section>
+  <div class="row"><button class="primary" id="go" ${avail?'':'disabled'}>${settings.mode==='flash'?'Empezar flashcards →':'Empezar examen →'}</button><span class="foot"><kbd>Enter</kbd> responde · <kbd>Shift</kbd>+<kbd>Enter</kbd> salto de línea</span></div>`;
+  document.getElementById("m-write").onclick=()=>{settings.mode="write";save();home();};
+  document.getElementById("m-mc").onclick=()=>{settings.mode="mc";save();home();};
+  document.getElementById("m-fc").onclick=()=>{settings.mode="flash";save();home();};
+  document.getElementById("tOn").onchange=e=>{settings.timer=e.target.checked;save();};
+  document.getElementById("secs").oninput=e=>{const v=parseInt(e.target.value,10);if(v>0){settings.secs=v;save();}};
+  document.getElementById("preset").onchange=e=>{if(e.target.value){settings.secs=+e.target.value;document.getElementById("secs").value=settings.secs;settings.timer=true;document.getElementById("tOn").checked=true;save();}};
+  document.getElementById("shuf").onchange=e=>{settings.shuffle=e.target.checked;save();};
+  document.getElementById("count").onchange=e=>{settings.count=+e.target.value;save();};
+  document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{const k=b.dataset.s;const i=settings.sections.indexOf(k);if(i>=0)settings.sections.splice(i,1);else settings.sections.push(k);save();home();});
+  document.getElementById("go").onclick=start;
+}
+
+function start(){
+  let pool=BANK.map((q,i)=>i).filter(i=>settings.sections.includes(BANK[i].s));
+  if(settings.shuffle) pool=shuf(pool);
+  if(settings.count>0) pool=pool.slice(0,settings.count);
+  S={queue:pool,idx:0,round:1,results:{},firstTry:{},roundLog:[],answered:false};
+  if(settings.mode==="flash"){S.known=0;S.unknown=[];return flash();}
+  show();
+}
+
+/* ===================== PREGUNTA ===================== */
+function show(){
+  stopTimer();
+  const qi=S.queue[S.idx], q=BANK[qi];
+  S.answered=false; S.sel=null;
+  const pct=Math.round(S.idx/S.queue.length*100);
+  const mc=settings.mode==="mc";
+  let opts="";
+  if(mc){
+    S.opts=shuf([{t:q.c,ok:true},...q.o.map(t=>({t,ok:false}))]);
+    opts=`<div class="opts" id="opts">${S.opts.map((o,i)=>`<button class="opt" data-i="${i}"><span class="k">${"ABCD"[i]}</span><span>${esc(o.t)}</span></button>`).join("")}</div>`;
+  }
+  app.innerHTML=`
+  <div class="stack" style="gap:10px">
+    <div class="bar">
+      <div class="row" style="gap:8px"><button class="ghost small" id="exit">← Salir</button>
+        <span class="foot">${S.round>1?`Repaso ${S.round-1} · `:""}Pregunta ${S.idx+1} de ${S.queue.length}</span></div>
+      <div class="row" style="gap:8px">
+        <button class="small" id="swap" title="Cambiar modo">${mc?"Cambiar a ✍️ Rellenar":"Cambiar a ☑️ Marcar"}</button>
+        ${settings.timer?`<span class="timer" id="clock">⏱ ${fmt(settings.secs)}</span><button class="small ghost" id="pause">Pausa</button>`:""}
+      </div>
+    </div>
+    <div class="progress"><i style="width:${pct}%"></i></div>
+    ${settings.timer?`<div class="tbar" id="tbar"><i style="width:100%"></i></div>`:""}
+  </div>
+  <section class="card stack" id="qcard">
+    <div><span class="tag">${esc(q.a)}</span></div>
+    <div class="q">${esc(q.q)}</div>
+    ${mc?opts:`<textarea id="ans" placeholder="Escribe tu respuesta con tus palabras…" aria-label="Tu respuesta"></textarea>
+      <div class="row"><button class="primary" id="send">Responder</button><button class="ghost" id="idk">No sé, ver respuesta</button></div>`}
+    <div id="fb" class="stack"></div>
+  </section>`;
+  document.getElementById("exit").onclick=()=>{ if(Object.keys(S.results).length) finishRound(true); else home(); };
+  document.getElementById("swap").onclick=()=>{ if(S.answered) {settings.mode=mc?"write":"mc";save();return show();} settings.mode=mc?"write":"mc";save();show();};
+  if(mc){
+    document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{ if(S.answered) return; answerMC(+b.dataset.i); });
+  }else{
+    const ta=document.getElementById("ans"); ta.focus();
+    ta.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();answerWrite();}};
+    document.getElementById("send").onclick=answerWrite;
+    document.getElementById("idk").onclick=()=>answerWrite(true);
+  }
+  if(settings.timer){startTimer(settings.secs); document.getElementById("pause").onclick=togglePause;}
+}
+
+function fmt(s){s=Math.max(0,s);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");}
+let remaining=0, paused=false;
+function startTimer(sec){
+  remaining=sec; paused=false; drawClock();
+  tick=setInterval(()=>{ if(paused) return; remaining--; drawClock(); if(remaining<=0){stopTimer(); timeUp();} },1000);
+}
+function drawClock(){
+  const c=document.getElementById("clock"), b=document.getElementById("tbar"); if(!c) return;
+  c.textContent=(paused?"⏸ ":"⏱ ")+fmt(remaining);
+  const low=remaining<=Math.max(5,Math.round(settings.secs*0.2));
+  c.classList.toggle("low",low); b.classList.toggle("low",low);
+  b.firstElementChild.style.width=(remaining/settings.secs*100)+"%";
+}
+function togglePause(){ if(S.answered) return; paused=!paused; const p=document.getElementById("pause"); if(p) p.textContent=paused?"Seguir":"Pausa"; drawClock(); }
+function stopTimer(){ if(tick){clearInterval(tick);tick=null;} }
+function timeUp(){
+  if(S.answered) return;
+  if(settings.mode==="mc"){ answerMC(null,true); } else { answerWrite(false,true); }
+}
+
+function answerMC(i,timeout){
+  S.answered=true; stopTimer();
+  const ok = i!=null && S.opts[i].ok;
+  document.querySelectorAll(".opt").forEach((b,j)=>{ b.disabled=true; if(S.opts[j].ok) b.classList.add("right"); else if(j===i) b.classList.add("wrong"); });
+  record(ok);
+  feedback({ok,timeout,mc:true});
+}
+function answerWrite(idk,timeout){
+  if(S.answered) return;
+  const ta=document.getElementById("ans"); const v=ta.value;
+  if(!idk && !timeout && !v.trim()){ ta.focus(); ta.placeholder="Escribe algo primero (o pulsa «No sé, ver respuesta»)"; return; }
+  S.answered=true; stopTimer();
+  ta.readOnly=true; document.getElementById("send").disabled=true; document.getElementById("idk").disabled=true;
+  const g=idk?{res:BANK[S.queue[S.idx]].k.map(x=>({label:x[0],hit:false})),ratio:0,ok:false}:grade(BANK[S.queue[S.idx]],v);
+  record(g.ok);
+  feedback({ok:g.ok,timeout,idk,g,mc:false});
+}
+function record(ok){
+  const qi=S.queue[S.idx];
+  S.results[qi]=ok;
+  if(!(qi in S.firstTry)) S.firstTry[qi]=ok;
+}
+function feedback({ok,timeout,idk,g,mc}){
+  const q=BANK[S.queue[S.idx]];
+  let cls=ok?"ok":"bad", msg=ok?"✔ ¡Correcto!":"✘ Incorrecto";
+  if(timeout) msg="⏰ Se acabó el tiempo";
+  else if(idk) msg="Aquí va la respuesta";
+  else if(!ok && g && g.ratio>=0.34){cls="mid";msg="◐ Casi: te faltaron ideas clave";}
+  const kw = (!mc && g && !idk) ? `<div class="stack" style="gap:6px"><span class="foot">Ideas clave que busqué en tu respuesta:</span><div class="kw">${g.res.map(r=>`<span class="${r.hit?'hit':'miss'}">${esc(r.label)}</span>`).join("")}</div></div>`:"";
+  const last=S.idx===S.queue.length-1;
+  document.getElementById("fb").innerHTML=`
+    <div class="verdict ${cls}" id="vd">${msg}</div>
+    ${kw}
+    <div class="panel pdf"><h3>Respuesta según tus apuntes</h3><div class="pdftext">${esc(q.r)}</div></div>
+    ${q.t?`<div class="panel tip"><h3>Tip</h3><div>${esc(q.t)}</div></div>`:""}
+    ${q.m?`<div class="panel mn"><h3>Mnemotecnia</h3><div>${esc(q.m)}</div></div>`:""}
+    <div class="row">
+      <button class="primary" id="next">${last?"Ver resultados →":"Siguiente →"}</button>
+      ${(!mc && !ok && !idk && !timeout)?`<button class="ghost" id="override">Mi respuesta sí estaba bien</button>`:""}
+      ${(!mc && ok)?`<button class="ghost" id="underride">Marcar como incorrecta</button>`:""}
+    </div>`;
+  const nx=document.getElementById("next"); nx.focus();
+  nx.onclick=next;
+  const ov=document.getElementById("override");
+  if(ov) ov.onclick=()=>{const qi=S.queue[S.idx];S.results[qi]=true;S.firstTry[qi]=true;const v=document.getElementById("vd");v.className="verdict ok";v.textContent="✔ Marcada como correcta por ti";ov.remove();};
+  const un=document.getElementById("underride");
+  if(un) un.onclick=()=>{const qi=S.queue[S.idx];S.results[qi]=false;S.firstTry[qi]=false;const v=document.getElementById("vd");v.className="verdict bad";v.textContent="✘ Marcada como incorrecta: volverá en el repaso";un.remove();};
+  document.getElementById("fb").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function next(){ if(S.idx<S.queue.length-1){S.idx++;show();} else finishRound(false); }
+
+/* ===================== FLASHCARDS ===================== */
+let fcKey=null;
+function flash(){
+  stopTimer();
+  const q=BANK[S.queue[S.idx]];
+  const pct=Math.round(S.idx/S.queue.length*100);
+  app.innerHTML=`
+  <div class="stack" style="gap:10px">
+    <div class="bar">
+      <div class="row" style="gap:8px"><button class="ghost small" id="exit">← Salir</button>
+        <span class="foot">${S.round>1?`Repaso ${S.round-1} · `:""}Tarjeta ${S.idx+1} de ${S.queue.length}</span></div>
+      <span class="foot">✔ ${S.known} · ✘ ${S.unknown.length}</span>
+    </div>
+    <div class="progress"><i style="width:${pct}%"></i></div>
+  </div>
+  <div class="fc" id="fc" role="button" tabindex="0" aria-label="Voltear tarjeta">
+    <div class="fc-in">
+      <div class="face front">
+        <div><span class="tag">${esc(q.a)}</span></div>
+        <div class="q">${esc(q.q)}</div>
+        <div class="hint">Toca la tarjeta o pulsa <kbd>Espacio</kbd> para ver la respuesta</div>
+      </div>
+      <div class="face back" aria-hidden="true">
+        <div class="panel pdf"><h3>Respuesta según tus apuntes</h3><div class="pdftext">${esc(q.r)}</div></div>
+        ${q.t?`<div class="panel tip"><h3>Tip</h3><div>${esc(q.t)}</div></div>`:""}
+        ${q.m?`<div class="panel mn"><h3>Mnemotecnia</h3><div>${esc(q.m)}</div></div>`:""}
+      </div>
+    </div>
+  </div>
+  <div class="fc-actions">
+    <button class="dunno" id="no">✘ No me la sé <kbd>←</kbd></button>
+    <button class="know" id="yes">✔ Me la sé <kbd>→</kbd></button>
+  </div>
+  <div class="row" style="justify-content:space-between">
+    <button class="ghost small" id="prev" ${S.idx===0?"disabled":""}>↑ Anterior</button>
+    <button class="ghost small" id="flipb">Voltear</button>
+  </div>`;
+  const fc=document.getElementById("fc");
+  const flip=()=>{fc.classList.toggle("flip");const b=fc.classList.contains("flip");fc.querySelector(".front").setAttribute("aria-hidden",b);fc.querySelector(".back").setAttribute("aria-hidden",!b);};
+  fc.onclick=flip; document.getElementById("flipb").onclick=flip;
+  const mark=ok=>{const qi=S.queue[S.idx];if(ok)S.known++;else S.unknown.push(qi);
+    if(S.idx<S.queue.length-1){S.idx++;flash();} else flashEnd();};
+  document.getElementById("yes").onclick=()=>mark(true);
+  document.getElementById("no").onclick=()=>mark(false);
+  document.getElementById("prev").onclick=()=>{if(S.idx>0){const pq=S.queue[S.idx-1];const u=S.unknown.lastIndexOf(pq);if(u>=0)S.unknown.splice(u,1);else S.known=Math.max(0,S.known-1);S.idx--;flash();}};
+  document.getElementById("exit").onclick=()=>{offKeys();home();};
+  offKeys();
+  fcKey=e=>{if(e.target.tagName==="BUTTON"&&e.key===" ")return;
+    if(e.key===" "||e.key==="Enter"){e.preventDefault();flip();}
+    else if(e.key==="ArrowRight")mark(true);
+    else if(e.key==="ArrowLeft")mark(false);
+    else if(e.key==="ArrowUp")document.getElementById("prev").click();};
+  document.addEventListener("keydown",fcKey);
+  fc.focus({preventScroll:true});
+}
+function offKeys(){if(fcKey){document.removeEventListener("keydown",fcKey);fcKey=null;}}
+function flashEnd(){
+  offKeys();
+  const total=S.queue.length, un=S.unknown.slice();
+  app.innerHTML=`
+  <header class="stack" style="gap:8px">
+    <div class="eyebrow">${S.round===1?"Flashcards":"Repaso "+(S.round-1)}</div>
+    <h1>${un.length?"Te faltan "+un.length+" tarjetas":"¡Dominaste todas!"}</h1>
+  </header>
+  <section class="card stack">
+    <div class="row" style="gap:28px;align-items:flex-end">
+      <div><div class="score">${total-un.length}/${total}</div><div class="foot">tarjetas que te sabías</div></div>
+    </div>
+    <div class="row">
+      ${un.length?`<button class="primary" id="again-fc">Repasar las ${un.length} que no me sé →</button>`:""}
+      <button class="${un.length?'':'primary'}" id="home">Volver al inicio</button>
+    </div>
+  </section>`;
+  if(un.length) document.getElementById("again-fc").onclick=()=>{S.queue=shuf(un);S.idx=0;S.round++;S.known=0;S.unknown=[];flash();};
+  document.getElementById("home").onclick=home;
+}
+
+/* ===================== RESULTADOS ===================== */
+function finishRound(early){
+  stopTimer();
+  const asked=early?S.queue.slice(0,S.idx+(S.answered?1:0)):S.queue;
+  const wrong=asked.filter(i=>S.results[i]===false);
+  const right=asked.length-wrong.length;
+  S.roundLog.push({round:S.round,total:asked.length,right});
+  const first=S.roundLog[0];
+  const pct=first.total?Math.round(first.right/first.total*20*10)/10:0;
+  const done=wrong.length===0;
+  app.innerHTML=`
+  <header class="stack" style="gap:8px">
+    <div class="eyebrow">${S.round===1?"Resultado del examen":"Resultado del repaso "+(S.round-1)}</div>
+    <h1>${done?"¡Todas correctas!":"Te faltan "+wrong.length}</h1>
+  </header>
+  <section class="card stack">
+    <div class="row" style="gap:28px;align-items:flex-end">
+      <div><div class="score">${right}/${asked.length}</div><div class="foot">correctas en esta ronda</div></div>
+      <div><div class="score" style="color:var(--accent)">${pct}</div><div class="foot">nota sobre 20 (primer intento)</div></div>
+    </div>
+    ${S.roundLog.length>1?`<p class="foot" style="margin:0">Rondas: ${S.roundLog.map(r=>(r.round===1?"Examen":"Repaso "+(r.round-1))+" "+r.right+"/"+r.total).join(" · ")}</p>`:""}
+    <div class="row">
+      ${done?"":`<button class="primary" id="retry">Repasar las ${wrong.length} que fallé →</button>`}
+      <button class="${done?'primary':''}" id="again">Nuevo examen</button>
+    </div>
+  </section>
+  ${wrong.length?`<section class="card stack"><h2>Para repasar</h2><div class="list">${wrong.map(i=>`<div class="li"><span class="dot bad"></span><div style="min-width:0"><b>${esc(BANK[i].q)}</b><div class="muted" style="white-space:pre-line;margin-top:4px">${esc(BANK[i].r)}</div>${BANK[i].m?`<div style="margin-top:4px;color:var(--ok)">💡 ${esc(BANK[i].m)}</div>`:""}</div></div>`).join("")}</div></section>`:""}`;
+  if(!done) document.getElementById("retry").onclick=()=>{S.queue=shuf(wrong);S.idx=0;S.round++;show();};
+  document.getElementById("again").onclick=home;
+}
+
+home();
+</script>
